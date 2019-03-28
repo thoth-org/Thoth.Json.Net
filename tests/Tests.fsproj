@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>netcoreapp2.0;net461</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../src/Thoth.Json.Net.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Util.fs" />
+    <Compile Include="..\paket-files\thoth-org\Thoth.Json\tests\Tests.Json.Decode.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/Tests.Json.Decode.fs</Link>
+    </Compile>
+    <Compile Include="..\paket-files\thoth-org\Thoth.Json\tests\Tests.Json.Encode.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/Tests.Json.Encode.fs</Link>
+    </Compile>
+    <Compile Include="Main.fs" />
+  </ItemGroup>
+  <Import Project="..\.paket\Paket.Restore.targets" />
+</Project>

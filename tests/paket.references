@@ -1,0 +1,5 @@
+FSharp.Core
+Expecto
+
+File: Tests.Json.Encode.fs
+File: Tests.Json.Decode.fs

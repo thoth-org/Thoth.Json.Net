@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Elm-inspired encoder and decoder for JSON targetting .Net and NetCore runtime</Description>
+    <PackageProjectUrl>https://github.com/MangelMaxime/Thoth</PackageProjectUrl>
+    <Packagelicense>https://github.com/MangelMaxime/Thoth/blob/master/LICENSE.md</Packagelicense>
+    <RepositoryUrl>https://github.com/MangelMaxime/Thoth</RepositoryUrl>
+    <PackageTags>fsharp;json</PackageTags>
+    <Authors>Maxime Mangel</Authors>
+    <Version>3.0.0-beta-002</Version>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Types.fs" />
+    <Compile Include="Decode.fs" />
+    <Compile Include="Encode.fs" />
+    <Compile Include="Extra.fs" />
+  </ItemGroup>
+  <Import Project="..\.paket\Paket.Restore.targets" />
+</Project>
