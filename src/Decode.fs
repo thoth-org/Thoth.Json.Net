@@ -284,30 +284,29 @@ module Decode =
     // Object primitives ///
     ///////////////////////
 
-    let field (fieldName: string) (decoder : Decoder<'value>) : Decoder<'value> =
+    let optional (fieldName : string) (decoder : Decoder<'value>) : Decoder<'value option> =
         fun path value ->
             if Helpers.isObject value then
                 let fieldValue = Helpers.getField fieldName value
-                match decoder (path + "." + fieldName) fieldValue with
-                | Ok _ as ok -> ok
-                | Error _ as er ->
-                    if Helpers.isUndefined fieldValue then
-                        Error(path, BadField ("an object with a field named `" + fieldName + "`", value))
-                    else er
+                if Helpers.isUndefined fieldValue then Ok None
+                else decoder (path + "." + fieldName) fieldValue |> Result.map Some
             else
                 Error(path, BadType("an object", value))
 
-    let at (fieldNames: string list) (decoder : Decoder<'value>) : Decoder<'value> =
+    let private badPathError fieldNames currentPath value =
+        let currentPath = defaultArg currentPath ("$"::fieldNames |> String.concat ".")
+        let msg = "an object with path `" + (String.concat "." fieldNames) + "`"
+        Error(currentPath, BadPath (msg, value, List.tryLast fieldNames |> Option.defaultValue ""))
+
+    let optionalAt (fieldNames : string list) (decoder : Decoder<'value>) : Decoder<'value option> =
         fun firstPath firstValue ->
-            let pathErrorMsg() =
-                "an object with path `" + (String.concat "." fieldNames) + "`"
             ((firstPath, firstValue, None), fieldNames)
             ||> List.fold (fun (curPath, curValue, res) field ->
                 match res with
                 | Some _ -> curPath, curValue, res
                 | None ->
                     if Helpers.isNullValue curValue then
-                        let res = Error(curPath, BadPath(pathErrorMsg(), firstValue, field))
+                        let res = badPathError fieldNames (Some curPath) firstValue
                         curPath, curValue, Some res
                     elif Helpers.isObject curValue then
                         let curValue = Helpers.getField field curValue
@@ -318,12 +317,22 @@ module Decode =
             |> function
                 | _, _, Some res -> res
                 | lastPath, lastValue, None ->
-                    match decoder lastPath lastValue with
-                    | Ok _ as ok -> ok
-                    | Error _ as er ->
-                        if Helpers.isUndefined lastValue then
-                            Error(lastPath, BadPath (pathErrorMsg(), firstValue, List.tryLast fieldNames |> Option.defaultValue ""))
-                        else er
+                    if Helpers.isUndefined lastValue then Ok None
+                    else decoder lastPath lastValue |> Result.map Some
+
+    let field (fieldName: string) (decoder : Decoder<'value>) : Decoder<'value> =
+        fun path value ->
+            match optional fieldName decoder path value with
+            | Error er -> Error er
+            | Ok(Some x) -> Ok x
+            | Ok None -> Error(path, BadField ("an object with a field named `" + fieldName + "`", value))
+
+    let at (fieldNames: string list) (decoder : Decoder<'value>) : Decoder<'value> =
+        fun path value ->
+            match optionalAt fieldNames decoder path value with
+            | Error er -> Error er
+            | Ok(Some x) -> Ok x
+            | Ok None -> badPathError fieldNames None value
 
     let index (requestedIndex: int) (decoder : Decoder<'value>) : Decoder<'value> =
         fun path token ->
@@ -350,12 +359,6 @@ module Decode =
         fun path value ->
             if Helpers.isNullValue value then Ok None
             else decoder path value |> Result.map Some
-
-    let optional (fieldName : string) (decoder : Decoder<'value>) : Decoder<'value option> =
-        field fieldName (option decoder)
-
-    let optionalAt (fieldNames : string list) (decoder : Decoder<'value>) : Decoder<'value option> =
-        at fieldNames (option decoder)
 
     //////////////////////
     // Data structure ///
@@ -617,9 +620,9 @@ module Decode =
                 member __.Optional =
                     { new IOptionalGetter with
                         member __.Field (fieldName : string) (decoder : Decoder<_>) =
-                            unwrap path (field fieldName (option decoder)) v
+                            unwrap path (optional fieldName decoder) v
                         member __.At (fieldNames : string list) (decoder : Decoder<_>) =
-                            unwrap path (at fieldNames (option decoder)) v
+                            unwrap path (optionalAt fieldNames decoder) v
                         // REVIEW: I would have preferred to use `unwrap path (option decoder) v`
                         // but this is necessary to make the tests pass... can we change the tests? ;)
                         member __.Raw (decoder: Decoder<_>) =
@@ -824,7 +827,8 @@ module Decode =
                 match acc with
                 | Error _ -> acc
                 | Ok result ->
-                    field name decoder.BoxedDecoder path value
+                    Helpers.getField name value
+                    |> decoder.BoxedDecoder (path + "." + name)
                     |> Result.map (fun v -> v::result))
 
     let private mixedArray msg (decoders: BoxedDecoder[]) (path: string) (values: JsonValue[]): Result<obj list, DecoderError> =
