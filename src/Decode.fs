@@ -69,7 +69,7 @@ module Decode =
             | TooSmallArray (msg, value) ->
                 "Expecting " + msg + ".\n" + (Helpers.anyToString value)
             | BadOneOf messages ->
-                "I run into the following problems:\n\n" + String.concat "\n" messages
+                "I run into the following problems:\n\n" + String.concat "\n\n" messages
             | FailMessage msg ->
                 "I run into a `fail` decoder: " + msg
 
@@ -305,10 +305,14 @@ module Decode =
 
     let field (fieldName: string) (decoder : Decoder<'value>) : Decoder<'value> =
         fun path value ->
-            match optional fieldName decoder path value with
-            | Error er -> Error er
-            | Ok(Some x) -> Ok x
-            | Ok None -> Error(path, BadField ("an object with a field named `" + fieldName + "`", value))
+            if Helpers.isObject value then
+                let fieldValue = Helpers.getField fieldName value
+                if Helpers.isUndefined fieldValue then
+                    Error(path, BadField ("an object with a field named `" + fieldName + "`", value))
+                else
+                    decoder (path + "." + fieldName) fieldValue
+            else
+                Error(path, BadType("an object", value))
 
     let at (fieldNames: string list) (decoder : Decoder<'value>) : Decoder<'value> =
         fun path value ->
@@ -593,7 +597,7 @@ module Decode =
         | Ok v -> v
         | Error er -> errors.Add(er); Unchecked.defaultof<'T>
 
-    type Getters<'T>(path: string, v: 'T) =
+    type Getters<'T>(path: string, v: JsonValue) =
         let mutable errors = ResizeArray<DecoderError>()
         let required =
             { new IRequiredGetter with
@@ -636,10 +640,11 @@ module Decode =
             match getters.Errors with
             | [] -> Ok result
             | fst::_ as errors ->
-                // TODO: Aggregate errors as with oneOf?
-                // let errors = List.map errorToString errors
-                // (path, BadOneOf errors) |> Error
-                Error fst
+                if errors.Length > 1 then
+                    let errors = List.map errorToString errors
+                    (path, BadOneOf errors) |> Error
+                else
+                    Error fst
 
     ///////////////////////
     // Tuples decoders ///
