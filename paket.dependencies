@@ -4,7 +4,7 @@ source https://www.nuget.org/api/v2
 storage:none
 
 nuget FSharp.Core redirects:force
-nuget Newtonsoft.Json >= 11.0.2
+nuget Newtonsoft.Json 11.0.2
 nuget Expecto
 
 # Get the tests from Thoth.Json repo so both project are in sync
