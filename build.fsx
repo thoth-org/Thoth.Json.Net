@@ -77,6 +77,7 @@ Target.create "Clean" (fun _ ->
     ++ "src/**/obj"
     ++ "tests/**/bin"
     ++ "tests/**/obj"
+    ++ "temp/"
     |> Shell.cleanDirs
 )
 
@@ -161,7 +162,6 @@ let pushNuget (newVersion: string) (projFile: string) =
     let versionRegex = Regex("<Version>(.*?)</Version>", RegexOptions.IgnoreCase)
 
     if needsPublishing versionRegex newVersion projFile then
-        let projDir = Path.GetDirectoryName(projFile)
         let nugetKey =
             match Environment.environVarOrNone "NUGET_KEY" with
             | Some nugetKey -> nugetKey
@@ -170,14 +170,12 @@ let pushNuget (newVersion: string) (projFile: string) =
         (versionRegex, projFile) ||> Util.replaceLines (fun line _ ->
             versionRegex.Replace(line, "<Version>" + newVersion + "</Version>") |> Some)
 
-        DotNet.pack (fun p ->
-            { p with
-                Configuration = DotNet.Release
-                Common = { p.Common with DotNetCliPath = "dotnet" } } )
-            projFile
+        Paket.pack (fun p ->
+            { p with BuildConfig = "Release"
+                     Version = newVersion } )
 
         let files =
-            Directory.GetFiles(projDir </> "bin" </> "Release", "*.nupkg")
+            Directory.GetFiles(root </> "temp", "*.nupkg")
             |> Array.find (fun nupkg -> nupkg.Contains(newVersion))
             |> fun x -> [x]
 
