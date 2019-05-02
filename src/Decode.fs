@@ -7,12 +7,13 @@ module Decode =
     open Newtonsoft.Json
     open Newtonsoft.Json.Linq
     open System.IO
+    open System.Text
 
     module private Helpers =
         let anyToString (token: JsonValue) : string =
             if isNull token then "null"
             else
-                use stream = new StringWriter(NewLine = "\n")
+                use stream = new StringWriterUTF8(NewLine = "\n")
                 use jsonWriter = new JsonTextWriter(
                                         stream,
                                         Formatting = Formatting.Indented,

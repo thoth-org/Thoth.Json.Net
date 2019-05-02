@@ -1,5 +1,15 @@
 namespace Thoth.Json.Net
 
+open System.Text
+open System.IO
+
+type StringWriterUTF8 () =
+    inherit StringWriter()
+
+    override __.Encoding
+        with get() = Encoding.UTF8
+
+
 type JsonValue = Newtonsoft.Json.Linq.JToken
 
 type ErrorReason =
