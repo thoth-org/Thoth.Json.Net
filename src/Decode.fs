@@ -12,7 +12,7 @@ module Decode =
         let anyToString (token: JsonValue) : string =
             if isNull token then "null"
             else
-                use stream = new StringWriter(NewLine = "\n")
+                use stream = new StringWriter(NewLine = System.Environment.NewLine)
                 use jsonWriter = new JsonTextWriter(
                                         stream,
                                         Formatting = Formatting.Indented,

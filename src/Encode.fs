@@ -293,7 +293,7 @@ module Encode =
     ///
     let toString (space: int) (token: JsonValue) : string =
         let format = if space = 0 then Formatting.None else Formatting.Indented
-        use stream = new StringWriter(NewLine = "\n")
+        use stream = new StringWriter(NewLine = System.Environment.NewLine)
         use jsonWriter = new JsonTextWriter(
                                 stream,
                                 Formatting = format,
