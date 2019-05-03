@@ -385,12 +385,13 @@ module Encode =
             else
                 let fullname = t.GetGenericTypeDefinition().FullName
                 if fullname = typedefof<obj option>.FullName then
-                    let encoder = t.GenericTypeArguments.[0] |> autoEncoder extra isCamelCase
+                    // Evaluate lazily so we don't need to generate the encoder for null values
+                    let encoder = lazy autoEncoder extra isCamelCase t.GenericTypeArguments.[0]
                     boxEncoder(fun (value: obj) ->
                         if isNull value then nil
                         else
                             let _, fields = FSharpValue.GetUnionFields(value, t, allowAccessToPrivateRepresentation=true)
-                            encoder.Encode fields.[0])
+                            encoder.Value.Encode fields.[0])
                 elif fullname = typedefof<obj list>.FullName
                     || fullname = typedefof<Set<string>>.FullName then
                     t.GenericTypeArguments.[0] |> autoEncoder extra isCamelCase |> genericSeq
