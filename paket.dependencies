@@ -8,8 +8,9 @@ nuget Newtonsoft.Json >= 11.0.2
 nuget Expecto
 
 # Get the tests from Thoth.Json repo so both project are in sync
-github thoth-org/Thoth.Json tests/Tests.Json.Encode.fs
-github thoth-org/Thoth.Json tests/Tests.Json.Decode.fs
+github thoth-org/Thoth.Json tests/Types.fs
+github thoth-org/Thoth.Json tests/Decoders.fs
+github thoth-org/Thoth.Json tests/Encoders.fs
 
 group netcorebuild
     source https://www.nuget.org/api/v2
