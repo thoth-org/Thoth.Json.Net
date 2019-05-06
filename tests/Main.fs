@@ -5,7 +5,7 @@ open Util.Testing
 
 [<EntryPoint>]
 let main args =
-    testList "All" [ Tests.Decode.tests
-                     Tests.Encode.tests
+    testList "All" [ Tests.Decoders.tests
+                     Tests.Encoders.tests
                    ]
     |> runTestsWithArgs defaultConfig args
