@@ -7,8 +7,7 @@ type StringWriterUTF8 () =
     inherit StringWriter()
 
     override __.Encoding
-        with get() = Encoding.UTF8
-
+        with get() = new UTF8Encoding(false) :> Encoding
 
 type JsonValue = Newtonsoft.Json.Linq.JToken
 
