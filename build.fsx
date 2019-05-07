@@ -121,7 +121,10 @@ Target.create "AdaptTest" (fun _ ->
             | "open Fable.Core.JsInterop" -> ""
             | _ -> originalLine
         )
-        |> File.write false path
+        // This is important to manually concat the lines using `\n` otherwise we end up with `CRLF`
+        // and the tests will fail on Windows
+        |> String.concat "\n"
+        |> File.writeString false path
     )
 )
 
