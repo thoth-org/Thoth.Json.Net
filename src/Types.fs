@@ -3,12 +3,6 @@ namespace Thoth.Json.Net
 open System.Text
 open System.IO
 
-type StringWriterUTF8 () =
-    inherit StringWriter()
-
-    override __.Encoding
-        with get() = new UTF8Encoding(false) :> Encoding
-
 type JsonValue = Newtonsoft.Json.Linq.JToken
 
 type ErrorReason =

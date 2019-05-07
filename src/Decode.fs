@@ -13,7 +13,7 @@ module Decode =
         let anyToString (token: JsonValue) : string =
             if isNull token then "null"
             else
-                use stream = new StringWriterUTF8(NewLine = "\n")
+                use stream = new StringWriter(NewLine = "\n")
                 use jsonWriter = new JsonTextWriter(
                                         stream,
                                         Formatting = Formatting.Indented,
