@@ -133,8 +133,6 @@ let getEncoding (filename : string) =
 
 
 Target.create "AdaptTest" (fun _ ->
-    printfn "------------------------------------------------------------"
-    printfn "Before adapting"
     [ "Types.fs"
       "Decoders.fs"
       "Encoders.fs" ]
@@ -155,23 +153,9 @@ Target.create "AdaptTest" (fun _ ->
             | "open Fable.Core.JsInterop" -> ""
             | _ -> originalLine
         )
-        |> File.write false path
+        |> String.concat "\n"
+        |> File.writeString false path
     )
-
-    printfn "------------------------------------------------------------"
-    printfn "After adapting"
-    [ "Types.fs"
-      "Decoders.fs"
-      "Encoders.fs" ]
-    |> List.map (fun fileName ->
-         root </> "paket-files" </> "thoth-org" </> "Thoth.Json" </> "tests" </> fileName
-    )
-    |> List.map (fun fileName ->
-        getEncoding fileName
-        fileName
-    )
-    |> ignore
-    printfn "------------------------------------------------------------"
 )
 
 Target.create "Test" (fun _ ->
