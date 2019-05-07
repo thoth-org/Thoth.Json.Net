@@ -9,6 +9,7 @@
 
 open System
 open System.IO
+open System.Text
 open System.Text.RegularExpressions
 open Fake.Core
 open Fake.Core.TargetOperators
@@ -104,12 +105,42 @@ let build project framework =
 let testNetFrameworkDir = root </> "tests" </> "bin" </> "Release" </> "net461"
 let testNetCoreDir = root </> "tests" </> "bin" </> "Release" </> "netcoreapp2.0"
 
+let getEncoding (filename : string) =
+    let bom: byte [] = Array.zeroCreate 4
+
+    use file = new FileStream(filename, FileMode.Open, FileAccess.Read)
+    let readRes = file.Read(bom, 0, 4)
+
+    printfn "READ RES: %i" readRes
+
+    let encoding =
+        if (bom.[0] = 0x2buy && bom.[1] = 0x2fuy && bom.[2] = 0x76uy) then
+            Encoding.UTF7
+        else if (bom.[0] = 0xefuy && bom.[1] = 0xbbuy && bom.[2] = 0xbfuy) then
+            Encoding.UTF8
+        else if (bom.[0] = 0xffuy && bom.[1] = 0xfeuy) then
+            Encoding.Unicode; //UTF-16LE
+        else if (bom.[0] = 0xfeuy && bom.[1] = 0xffuy) then
+            Encoding.BigEndianUnicode; //UTF-16BE
+        else if (bom.[0] = 0uy && bom.[1] = 0uy && bom.[2] = 0xfeuy && bom.[3] = 0xffuy) then
+            Encoding.UTF32
+        else
+            Encoding.ASCII
+
+    printfn "GUESSED ENCODING: %A" encoding
+
+
 Target.create "AdaptTest" (fun _ ->
+    printfn "------------------------------------------------------------"
     [ "Types.fs"
       "Decoders.fs"
       "Encoders.fs" ]
     |> List.map (fun fileName ->
          root </> "paket-files" </> "thoth-org" </> "Thoth.Json" </> "tests" </> fileName
+    )
+    |> List.map (fun fileName ->
+        getEncoding fileName
+        fileName
     )
     |> List.iter (fun path ->
         File.ReadLines path
@@ -123,6 +154,7 @@ Target.create "AdaptTest" (fun _ ->
         )
         |> File.write false path
     )
+    printfn "------------------------------------------------------------"
 )
 
 Target.create "Test" (fun _ ->
