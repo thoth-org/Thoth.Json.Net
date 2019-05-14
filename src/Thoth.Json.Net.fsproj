@@ -7,7 +7,7 @@
     <RepositoryUrl>https://github.com/thoth-org/Thoth.Json.Net</RepositoryUrl>
     <PackageTags>fsharp;json</PackageTags>
     <Authors>Maxime Mangel</Authors>
-    <Version>3.1.0</Version>
+    <Version>3.2.0</Version>
   </PropertyGroup>
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
