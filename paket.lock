@@ -671,9 +671,9 @@ NUGET
       System.Xml.ReaderWriter (>= 4.3) - restriction: && (< monoandroid) (< monotouch) (< net46) (>= netstandard1.3) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)
 GITHUB
   remote: thoth-org/Thoth.Json
-    tests/Decoders.fs (df5b9774948348f2ae4d8cee31ee9683f815023a)
-    tests/Encoders.fs (df5b9774948348f2ae4d8cee31ee9683f815023a)
-    tests/Types.fs (df5b9774948348f2ae4d8cee31ee9683f815023a)
+    tests/Decoders.fs (5a893b01efa38feb59497de787e4fad1974f4c36)
+    tests/Encoders.fs (5a893b01efa38feb59497de787e4fad1974f4c36)
+    tests/Types.fs (5a893b01efa38feb59497de787e4fad1974f4c36)
 GROUP netcorebuild
 RESTRICTION: == netstandard2.0
 NUGET

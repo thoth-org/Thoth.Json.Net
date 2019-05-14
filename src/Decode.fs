@@ -95,7 +95,9 @@ module Decode =
     let fromString (decoder : Decoder<'T>) =
         fun value ->
             try
-                let json = Newtonsoft.Json.Linq.JValue.Parse value
+                use reader = new JsonTextReader(new StringReader(value), DateParseHandling = DateParseHandling.None)
+
+                let json = Newtonsoft.Json.Linq.JValue.ReadFrom reader
                 fromValue "$" decoder json
             with
                 | :? Newtonsoft.Json.JsonReaderException as ex ->
