@@ -1,4 +1,5 @@
 namespace Thoth.Json.Net
+open Newtonsoft.Json.Serialization
 
 [<RequireQualifiedAccess>]
 module Decode =
@@ -1086,6 +1087,9 @@ module Decode =
         /// ATTENTION: Use this only when other arguments (isCamelCase, extra) don't change
         static member generateDecoderCached<'T> (?isCamelCase : bool, ?extra: ExtraCoders): Decoder<'T> =
             let t = typeof<'T>
+            Auto.generateDecoderCached (t, ?isCamelCase = isCamelCase, ?extra = extra)
+
+        static member generateDecoderCached<'T> (t:System.Type, ?isCamelCase : bool, ?extra: ExtraCoders): Decoder<'T> =
             let decoderCrate =
                 Cache.Decoders.Value.GetOrAdd(t, fun t ->
                     let isCamelCase = defaultArg isCamelCase false

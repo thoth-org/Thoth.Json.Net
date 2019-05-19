@@ -21,6 +21,7 @@
       <Paket>True</Paket>
       <Link>paket-files/Decoders.fs</Link>
     </Compile>
+    <Compile Include="Converter.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
