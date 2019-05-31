@@ -959,40 +959,46 @@ module Decode =
                 |> Result.map (fun values -> FSharpValue.MakeUnion(uci, List.toArray values, allowAccessToPrivateRepresentation=true))
 
     and private autoDecodeRecordsAndUnions extra (isCamelCase : bool) (isOptional : bool) (t: System.Type): BoxedDecoder =
-        if FSharpType.IsRecord(t, allowAccessToPrivateRepresentation=true) then
-            let decoders =
-                FSharpType.GetRecordFields(t, allowAccessToPrivateRepresentation=true)
-                |> Array.map (fun fi ->
-                    let name =
-                        if isCamelCase then fi.Name.[..0].ToLowerInvariant() + fi.Name.[1..]
-                        else fi.Name
-                    name, autoDecoder extra isCamelCase false fi.PropertyType)
-            boxDecoder(fun path value ->
-                autoObject decoders path value
-                |> Result.map (fun xs -> FSharpValue.MakeRecord(t, List.toArray xs, allowAccessToPrivateRepresentation=true)))
+        // Add the decoder to extra in case one of the fields is recursive
+        let decoderRef = ref Unchecked.defaultof<_>
+        let extra = extra |> Map.add t.FullName decoderRef
+        let decoder =
+            if FSharpType.IsRecord(t, allowAccessToPrivateRepresentation=true) then
+                let decoders =
+                    FSharpType.GetRecordFields(t, allowAccessToPrivateRepresentation=true)
+                    |> Array.map (fun fi ->
+                        let name =
+                            if isCamelCase then fi.Name.[..0].ToLowerInvariant() + fi.Name.[1..]
+                            else fi.Name
+                        name, autoDecoder extra isCamelCase false fi.PropertyType)
+                boxDecoder(fun path value ->
+                    autoObject decoders path value
+                    |> Result.map (fun xs -> FSharpValue.MakeRecord(t, List.toArray xs, allowAccessToPrivateRepresentation=true)))
 
-        elif FSharpType.IsUnion(t, allowAccessToPrivateRepresentation=true) then
-            boxDecoder(fun path (value: JsonValue) ->
-                if Helpers.isString(value) then
-                    let name = Helpers.asString value
-                    makeUnion extra isCamelCase t name path [||]
-                elif Helpers.isArray(value) then
-                    let values = Helpers.asArray value
-                    let name = Helpers.asString values.[0]
-                    makeUnion extra isCamelCase t name path values.[1..]
-                else (path, BadPrimitive("a string or array", value)) |> Error)
-        else
-            if isOptional then
-                // The error will only happen at runtime if the value is not null
-                // See https://github.com/MangelMaxime/Thoth/pull/84#issuecomment-444837773
-                boxDecoder(fun path value -> Error(path, BadType("an extra coder for " + t.FullName, value)))
+            elif FSharpType.IsUnion(t, allowAccessToPrivateRepresentation=true) then
+                boxDecoder(fun path (value: JsonValue) ->
+                    if Helpers.isString(value) then
+                        let name = Helpers.asString value
+                        makeUnion extra isCamelCase t name path [||]
+                    elif Helpers.isArray(value) then
+                        let values = Helpers.asArray value
+                        let name = Helpers.asString values.[0]
+                        makeUnion extra isCamelCase t name path values.[1..]
+                    else (path, BadPrimitive("a string or array", value)) |> Error)
             else
-                failwithf "Cannot generate auto decoder for %s. Please pass an extra decoder." t.FullName
+                if isOptional then
+                    // The error will only happen at runtime if the value is not null
+                    // See https://github.com/MangelMaxime/Thoth/pull/84#issuecomment-444837773
+                    boxDecoder(fun path value -> Error(path, BadType("an extra coder for " + t.FullName, value)))
+                else
+                    failwithf "Cannot generate auto decoder for %s. Please pass an extra decoder." t.FullName
+        decoderRef := decoder
+        decoder
 
-    and private autoDecoder (extra: ExtraCoders) isCamelCase (isOptional : bool) (t: System.Type) : BoxedDecoder =
+    and private autoDecoder (extra: Map<string, ref<BoxedDecoder>>) isCamelCase (isOptional : bool) (t: System.Type) : BoxedDecoder =
       let fullname = t.FullName
       match Map.tryFind fullname extra with
-      | Some(_,decoder) -> decoder
+      | Some decoderRef -> boxDecoder(fun path value -> decoderRef.contents.BoxedDecoder path value)
       | None ->
         if t.IsArray then
             let elemType = t.GetElementType()
@@ -1071,6 +1077,11 @@ module Decode =
                     else v.Value<obj>() |> Ok)
             else autoDecodeRecordsAndUnions extra isCamelCase isOptional t
 
+    let private makeExtra (extra: ExtraCoders option) =
+        match extra with
+        | None -> Map.empty
+        | Some e -> Map.map (fun _ (_,dec) -> ref dec) e
+
     type Auto =
         /// ATTENTION: Use this only when other arguments (isCamelCase, extra) don't change
         static member generateDecoderCached<'T> (?isCamelCase : bool, ?extra: ExtraCoders): Decoder<'T> =
@@ -1078,8 +1089,7 @@ module Decode =
             let decoderCrate =
                 Cache.Decoders.Value.GetOrAdd(t, fun t ->
                     let isCamelCase = defaultArg isCamelCase false
-                    let extra = match extra with Some e -> e | None -> Map.empty
-                    autoDecoder extra isCamelCase false t)
+                    autoDecoder (makeExtra extra) isCamelCase false t)
             fun path token ->
                 match decoderCrate.Decode(path, token) with
                 | Ok x -> Ok(x :?> 'T)
@@ -1087,8 +1097,7 @@ module Decode =
 
         static member generateDecoder<'T> (?isCamelCase : bool, ?extra: ExtraCoders): Decoder<'T> =
             let isCamelCase = defaultArg isCamelCase false
-            let extra = match extra with Some e -> e | None -> Map.empty
-            let decoderCrate = autoDecoder extra isCamelCase false typeof<'T>
+            let decoderCrate = autoDecoder (makeExtra extra) isCamelCase false typeof<'T>
             fun path token ->
                 match decoderCrate.Decode(path, token) with
                 | Ok x -> Ok(x :?> 'T)
