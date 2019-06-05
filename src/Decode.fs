@@ -1118,6 +1118,7 @@ module Decode =
         static member fromString(json: string, t: System.Type, ?isCamelCase : bool, ?extra: ExtraCoders) : Result<obj, string> =
             let decoder = Auto.generateDecoder(t = t, ?isCamelCase=isCamelCase, ?extra=extra)
             fromString decoder json
+
         static member unsafeFromString<'T>(json: string, ?isCamelCase : bool, ?extra: ExtraCoders): 'T =
             let decoder = Auto.generateDecoder(?isCamelCase=isCamelCase, ?extra=extra)
             match fromString decoder json with
