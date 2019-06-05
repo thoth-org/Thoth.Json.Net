@@ -1095,6 +1095,14 @@ module Decode =
                 | Ok x -> Ok(x :?> 'T)
                 | Error er -> Error er
 
+        static member generateDecoder (t: System.Type, ?isCamelCase : bool, ?extra: ExtraCoders): Decoder<obj> =
+            let isCamelCase = defaultArg isCamelCase false
+            let decoderCrate = autoDecoder (makeExtra extra) isCamelCase false t
+            fun path token ->
+                match decoderCrate.Decode(path, token) with
+                | Ok x -> Ok(x)
+                | Error er -> Error er
+
         static member generateDecoder<'T> (?isCamelCase : bool, ?extra: ExtraCoders): Decoder<'T> =
             let isCamelCase = defaultArg isCamelCase false
             let decoderCrate = autoDecoder (makeExtra extra) isCamelCase false typeof<'T>
@@ -1107,6 +1115,9 @@ module Decode =
             let decoder = Auto.generateDecoder(?isCamelCase=isCamelCase, ?extra=extra)
             fromString decoder json
 
+        static member fromString(json: string, t: System.Type, ?isCamelCase : bool, ?extra: ExtraCoders) : Result<obj, string> =
+            let decoder = Auto.generateDecoder(t = t, ?isCamelCase=isCamelCase, ?extra=extra)
+            fromString decoder json
         static member unsafeFromString<'T>(json: string, ?isCamelCase : bool, ?extra: ExtraCoders): 'T =
             let decoder = Auto.generateDecoder(?isCamelCase=isCamelCase, ?extra=extra)
             match fromString decoder json with
