@@ -1,21 +1,23 @@
-module Thoth.Json.Net.Converters
+namespace Thoth.Json.Net
 
-open Thoth.Json.Net
-open Newtonsoft.Json
-open Newtonsoft.Json.Linq
+module Converters =
 
-type Converter (?isCamelCase : bool, ?extra: ExtraCoders) =
-    inherit JsonConverter()
+    open Thoth.Json.Net
+    open Newtonsoft.Json
+    open Newtonsoft.Json.Linq
 
-    override __.CanConvert(t) = true
+    type Converter (?isCamelCase : bool, ?extra: ExtraCoders) =
+        inherit JsonConverter()
 
-    override __.WriteJson(writer, value, _) = 
-        let t = value.GetType ()
-        let encoder = Encode.Auto.generateEncoderCached(t, ?isCamelCase=isCamelCase, ?extra=extra)
-        (encoder value).WriteTo(writer)
-        writer.Flush()
-        
-    override __.ReadJson(reader, t, _, _) =
-        let decoder = Decode.Auto.generateDecoderCached(t, ?isCamelCase=isCamelCase, ?extra=extra)
-        let json  = JToken.Load(reader).ToString()
-        Decode.unsafeFromString decoder json 
+        override __.CanConvert(_t) = true
+
+        override __.WriteJson(writer, value, _serializer) =
+            let t = value.GetType ()
+            let encoder = Encode.Auto.generateEncoderCached(t, ?isCamelCase=isCamelCase, ?extra=extra)
+            (encoder value).WriteTo(writer)
+            writer.Flush()
+
+        override __.ReadJson(reader, t, _existingValue, _serializer) =
+            let decoder = Decode.Auto.LowLevel.generateDecoderCached(t, ?isCamelCase=isCamelCase, ?extra=extra)
+            let json  = JToken.Load(reader).ToString()
+            Decode.unsafeFromString decoder json
