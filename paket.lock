@@ -4,6 +4,8 @@ NUGET
     Expecto (8.10.1)
       FSharp.Core (>= 4.3.4) - restriction: || (>= net461) (>= netstandard2.0)
       Mono.Cecil (>= 0.10.3) - restriction: || (>= net461) (>= netstandard2.0)
+    Fable.Core (3.0)
+      FSharp.Core (>= 4.5.2) - restriction: >= netstandard2.0
     FSharp.Core (4.6.2) - redirects: force
       System.Collections (>= 4.0.11) - restriction: && (< net45) (>= netstandard1.6) (< netstandard2.0)
       System.Console (>= 4.0) - restriction: && (< net45) (>= netstandard1.6) (< netstandard2.0)
@@ -671,9 +673,9 @@ NUGET
       System.Xml.ReaderWriter (>= 4.3) - restriction: && (< monoandroid) (< monotouch) (< net46) (>= netstandard1.3) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)
 GITHUB
   remote: thoth-org/Thoth.Json
-    tests/Decoders.fs (092ffc671dfb456086f3d26d36b479a0e8431639)
-    tests/Encoders.fs (092ffc671dfb456086f3d26d36b479a0e8431639)
-    tests/Types.fs (092ffc671dfb456086f3d26d36b479a0e8431639)
+    tests/Decoders.fs (0640a98cd571e90ccd573dbf6f963f8c1a204fa7)
+    tests/Encoders.fs (0640a98cd571e90ccd573dbf6f963f8c1a204fa7)
+    tests/Types.fs (0640a98cd571e90ccd573dbf6f963f8c1a204fa7)
 GROUP netcorebuild
 RESTRICTION: == netstandard2.0
 NUGET

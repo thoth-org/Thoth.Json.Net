@@ -1,5 +1,6 @@
 FSharp.Core
 Expecto
+Fable.Core
 
 File: Types.fs
 File: Encoders.fs

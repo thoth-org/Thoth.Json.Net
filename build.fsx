@@ -117,7 +117,7 @@ Target.create "AdaptTest" (fun _ ->
         |> List.map (fun originalLine ->
             match originalLine.Trim() with
             | "open Thoth.Json" -> "open Thoth.Json.Net"
-            | "open Fable.Core"
+            // | "open Fable.Core"
             | "open Fable.Core.JsInterop" -> ""
             | _ -> originalLine
         )

@@ -328,6 +328,36 @@ module Encode =
             Some(fun (v: obj) -> (v :?> System.Guid).ToString())
         else None
 
+    let private (|StringEnum|_|) (typ : System.Type) =
+        typ.CustomAttributes
+        |> Seq.tryPick (function
+            | attr when attr.AttributeType.FullName = "Fable.Core.StringEnumAttribute" -> Some attr
+            | _ -> None
+        )
+
+    let private (|CompiledName|_|) (caseInfo : UnionCaseInfo) =
+        caseInfo.GetCustomAttributes()
+        |> Seq.tryPick (function
+            | :? CompiledNameAttribute as att -> Some att.CompiledName
+            | _ -> None)
+
+    let private (|LowerFirst|Forward|) (args : IList<System.Reflection.CustomAttributeTypedArgument>) =
+        args
+        |> Seq.tryPick (function
+            | rule when rule.ArgumentType.FullName = "Fable.Core.CaseRules" -> Some rule
+            | _ -> None
+        )
+        |> function
+        | Some rule ->
+            match rule.Value with
+            | :? int as value ->
+                match value with
+                | 0 -> Forward
+                | 1 -> LowerFirst
+                | _ -> LowerFirst // should not happen
+            | _ -> LowerFirst // should not happen
+        | None -> LowerFirst
+
     let rec private autoEncodeRecordsAndUnions extra (isCamelCase : bool) (t: System.Type) : BoxedEncoder =
         // Add the encoder to extra in case one of the fields is recursive
         let encoderRef = ref Unchecked.defaultof<_>
@@ -352,7 +382,21 @@ module Encode =
                 boxEncoder(fun (value: obj) ->
                     let info, fields = FSharpValue.GetUnionFields(value, t, allowAccessToPrivateRepresentation=true)
                     match fields.Length with
-                    | 0 -> string info.Name
+                    | 0 ->
+                        match t with
+                        // Replicate Fable behaviour when using StringEnum
+                        | StringEnum t ->
+                            match info with
+                            | CompiledName name -> string name
+                            | _ ->
+                                match t.ConstructorArguments with
+                                | LowerFirst ->
+                                    let name = info.Name.[..0].ToLowerInvariant() + info.Name.[1..]
+                                    string name
+                                | Forward -> string info.Name
+
+                        | _ -> string info.Name
+
                     | len ->
                         let fieldTypes = info.GetFields()
                         let target = Array.zeroCreate<JsonValue> (len + 1)
