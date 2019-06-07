@@ -18,6 +18,7 @@ open Fake.IO.Globbing.Operators
 open Fake.IO.FileSystemOperators
 open Fake.Tools.Git
 open Fake.JavaScript
+open Fake.Api
 
 let versionFromGlobalJson : DotNet.CliInstallOptions -> DotNet.CliInstallOptions = (fun o ->
         { o with Version = DotNet.Version (DotNet.getSDKVersionFromGlobalJson()) }
@@ -32,8 +33,17 @@ let inline yarnWorkDir (ws : string) (yarnParams : Yarn.YarnParams) =
     { yarnParams with WorkingDirectory = ws }
 
 let root = __SOURCE_DIRECTORY__
-let projectFile = "./src/Thoth.Json.Net.fsproj"
-let testsFile = "./tests/Tests.fsproj"
+
+module Source =
+    let dir = root </> "src"
+    let projectFile = dir </> "Thoth.Json.Net.fsproj"
+
+module Tests =
+    let dir = root </> "tests"
+    let projectFile = dir </> "Tests.fsproj"
+
+let gitOwner = "thoth-org"
+let repoName = "Thoth.Json.Net"
 
 module Util =
 
@@ -86,8 +96,8 @@ Target.create "YarnInstall"(fun _ ->
 )
 
 Target.create "DotnetRestore" (fun _ ->
-    DotNet.restore id projectFile
-    DotNet.restore id testsFile
+    DotNet.restore (dtntWorkDir Source.dir) ""
+    DotNet.restore (dtntWorkDir Tests.dir) ""
 )
 
 let mono workingDir args =
@@ -129,8 +139,8 @@ Target.create "AdaptTest" (fun _ ->
 )
 
 Target.create "Test" (fun _ ->
-    build testsFile "netcoreapp2.0"
-    build testsFile "net461"
+    build Tests.projectFile "netcoreapp2.0"
+    build Tests.projectFile "net461"
 
     if Environment.isUnix then
         mono testNetFrameworkDir [ "Tests.exe" ]
@@ -165,44 +175,84 @@ let needsPublishing (versionRegex: Regex) (newVersion: string) projFile =
 let pushNuget (newVersion: string) (projFile: string) =
     let versionRegex = Regex("<Version>(.*?)</Version>", RegexOptions.IgnoreCase)
 
-    if needsPublishing versionRegex newVersion projFile then
-        let nugetKey =
-            match Environment.environVarOrNone "NUGET_KEY" with
-            | Some nugetKey -> nugetKey
-            | None -> failwith "The Nuget API key must be set in a NUGET_KEY environmental variable"
+    let nugetKey =
+        match Environment.environVarOrNone "NUGET_KEY" with
+        | Some nugetKey -> nugetKey
+        | None -> failwith "The Nuget API key must be set in a NUGET_KEY environmental variable"
 
-        (versionRegex, projFile) ||> Util.replaceLines (fun line _ ->
-            versionRegex.Replace(line, "<Version>" + newVersion + "</Version>") |> Some)
+    (versionRegex, projFile) ||> Util.replaceLines (fun line _ ->
+        versionRegex.Replace(line, "<Version>" + newVersion + "</Version>") |> Some)
 
-        Paket.pack (fun p ->
-            { p with BuildConfig = "Release"
-                     Version = newVersion } )
+    Paket.pack (fun p ->
+        { p with BuildConfig = "Release"
+                 Version = newVersion } )
 
-        let files =
-            Directory.GetFiles(root </> "temp", "*.nupkg")
-            |> Array.find (fun nupkg -> nupkg.Contains(newVersion))
-            |> fun x -> [x]
+    let files =
+        Directory.GetFiles(root </> "temp", "*.nupkg")
+        |> Array.find (fun nupkg -> nupkg.Contains(newVersion))
+        |> fun x -> [x]
 
-        Paket.pushFiles (fun o ->
-            { o with ApiKey = nugetKey
-                     PublishUrl = "https://www.nuget.org/api/v2/package"
-                     WorkingDir = __SOURCE_DIRECTORY__ })
-            files
+    Paket.pushFiles (fun o ->
+        { o with ApiKey = nugetKey
+                 PublishUrl = "https://www.nuget.org/api/v2/package"
+                 WorkingDir = __SOURCE_DIRECTORY__ })
+        files
+
+let versionRegex = Regex("^## ?\\[?v?([\\w\\d.-]+\\.[\\w\\d.-]+[a-zA-Z0-9])\\]?", RegexOptions.IgnoreCase)
+
+let getLastVersion () =
+    File.ReadLines("CHANGELOG.md")
+        |> Seq.tryPick (fun line ->
+            let m = versionRegex.Match(line)
+            if m.Success then Some m else None)
+        |> function
+            | None -> failwith "Couldn't find version in changelog file"
+            | Some m ->
+                m.Groups.[1].Value
+
+let isPreRelease (version : string) =
+    let regex = Regex(".*(alpha|beta|rc).*", RegexOptions.IgnoreCase)
+    regex.IsMatch(version)
+
+let getNotes (version : string) =
+    File.ReadLines("CHANGELOG.md")
+    |> Seq.skipWhile(fun line ->
+        let m = versionRegex.Match(line)
+
+        if m.Success then
+            not (m.Groups.[1].Value = version)
+        else
+            true
+    )
+    // Remove the version line
+    |> Seq.skip 1
+    |> Seq.takeWhile (fun line ->
+        let m = versionRegex.Match(line)
+        not m.Success
+    )
 
 Target.create "Publish" (fun _ ->
-    let versionRegex = Regex("^## ?\\[?v?([\\w\\d.-]+\\.[\\w\\d.-]+[a-zA-Z0-9])\\]?", RegexOptions.IgnoreCase)
+    let version = getLastVersion()
+    pushNuget version Source.projectFile
+)
 
-    let newVersion =
-        File.ReadLines("CHANGELOG.md")
-            |> Seq.tryPick (fun line ->
-                let m = versionRegex.Match(line)
-                if m.Success then Some m else None)
-            |> function
-                | None -> failwith "Couldn't find version in changelog file"
-                | Some m ->
-                    m.Groups.[1].Value
+Target.create "Release" (fun _ ->
+    let version = getLastVersion()
 
-    pushNuget newVersion projectFile
+    let token =
+        match Environment.environVarOrDefault "GITHUB_TOKEN" "" with
+        | s when not (System.String.IsNullOrWhiteSpace s) -> s
+        | _ -> failwith "The Github token must be set in a GITHUB_TOKEN environmental variable"
+
+    let nupkg =
+        Directory.GetFiles(root </> "temp", "*.nupkg")
+        |> Array.find (fun nupkg -> nupkg.Contains(version))
+
+    GitHub.createClientWithToken token
+    |> GitHub.draftNewRelease gitOwner repoName version (isPreRelease version) (getNotes version)
+    |> GitHub.uploadFile nupkg
+    |> GitHub.publishDraft
+    |> Async.RunSynchronously
 )
 
 "Clean"
@@ -211,5 +261,6 @@ Target.create "Publish" (fun _ ->
     ==> "AdaptTest"
     ==> "Test"
     ==> "Publish"
+    ==> "Release"
 
 Target.runOrDefault "Test"

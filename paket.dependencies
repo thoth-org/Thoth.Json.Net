@@ -1,4 +1,4 @@
-version 5.198.0
+version 5.206.0
 source https://www.nuget.org/api/v2
 
 storage:none
@@ -28,3 +28,4 @@ group netcorebuild
     nuget Fake.IO.FileSystem
     nuget Fake.Tools.Git
     nuget Fake.JavaScript.Yarn
+    nuget Fake.Api.GitHub
