@@ -16,7 +16,7 @@ open Fake.DotNet
 open Fake.IO
 open Fake.IO.Globbing.Operators
 open Fake.IO.FileSystemOperators
-open Fake.Tools.Git
+open Fake.Tools
 open Fake.JavaScript
 open Fake.Api
 
@@ -226,6 +226,7 @@ let getNotes (version : string) =
     )
     // Remove the version line
     |> Seq.skip 1
+    // Take all until the next version line
     |> Seq.takeWhile (fun line ->
         let m = versionRegex.Match(line)
         not m.Success
@@ -238,6 +239,11 @@ Target.create "Publish" (fun _ ->
 
 Target.create "Release" (fun _ ->
     let version = getLastVersion()
+
+    Git.Staging.stageAll root
+    let commitMsg = sprintf "Release version %s" version
+    Git.Commit.exec root commitMsg
+    Git.Branches.push root
 
     let token =
         match Environment.environVarOrDefault "GITHUB_TOKEN" "" with
