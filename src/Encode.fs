@@ -328,12 +328,14 @@ module Encode =
             Some(fun (v: obj) -> (v :?> System.Guid).ToString())
         else None
 
+    #if !NETFRAMEWORK
     let private (|StringEnum|_|) (typ : System.Type) =
         typ.CustomAttributes
         |> Seq.tryPick (function
-            | attr when attr.AttributeType.FullName = "Fable.Core.StringEnumAttribute" -> Some attr
+            | attr when attr.AttributeType.FullName = typeof<Fable.Core.StringEnumAttribute>.FullName -> Some attr
             | _ -> None
         )
+
 
     let private (|CompiledName|_|) (caseInfo : UnionCaseInfo) =
         caseInfo.GetCustomAttributes()
@@ -344,19 +346,22 @@ module Encode =
     let private (|LowerFirst|Forward|) (args : IList<System.Reflection.CustomAttributeTypedArgument>) =
         args
         |> Seq.tryPick (function
-            | rule when rule.ArgumentType.FullName = "Fable.Core.CaseRules" -> Some rule
+            | rule when rule.ArgumentType.FullName = typeof<Fable.Core.CaseRules>.FullName -> Some rule
             | _ -> None
         )
         |> function
         | Some rule ->
             match rule.Value with
             | :? int as value ->
+                printfn "%A" value
                 match value with
                 | 0 -> Forward
                 | 1 -> LowerFirst
                 | _ -> LowerFirst // should not happen
             | _ -> LowerFirst // should not happen
-        | None -> LowerFirst
+        | None ->
+            LowerFirst
+    #endif
 
     let rec private autoEncodeRecordsAndUnions extra (isCamelCase : bool) (t: System.Type) : BoxedEncoder =
         // Add the encoder to extra in case one of the fields is recursive
@@ -383,6 +388,7 @@ module Encode =
                     let info, fields = FSharpValue.GetUnionFields(value, t, allowAccessToPrivateRepresentation=true)
                     match fields.Length with
                     | 0 ->
+                        #if !NETFRAMEWORK
                         match t with
                         // Replicate Fable behaviour when using StringEnum
                         | StringEnum t ->
@@ -396,6 +402,9 @@ module Encode =
                                 | Forward -> string info.Name
 
                         | _ -> string info.Name
+                        #else
+                        string info.Name
+                        #endif
 
                     | len ->
                         let fieldTypes = info.GetFields()
