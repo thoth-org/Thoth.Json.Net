@@ -174,7 +174,7 @@ let needsPublishing (versionRegex: Regex) (newVersion: string) projFile =
                 not sameVersion
 
 let pushNuget (newVersion: string) (projFile: string) =
-    let versionRegex = Regex("version\\s(.*?)", RegexOptions.IgnoreCase)
+    let versionRegex = Regex("^version\\s(.*?)$", RegexOptions.IgnoreCase)
 
     let nugetKey =
         match Environment.environVarOrNone "NUGET_KEY" with
