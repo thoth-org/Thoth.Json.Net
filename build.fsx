@@ -180,6 +180,8 @@ let pushNuget (newVersion: string) (projFile: string) =
         | Some nugetKey -> nugetKey
         | None -> failwith "The Nuget API key must be set in a NUGET_KEY environmental variable"
 
+    let needsPublishing = needsPublishing versionRegex newVersion projFile
+
     (versionRegex, projFile) ||> Util.replaceLines (fun line _ ->
         versionRegex.Replace(line, "<Version>" + newVersion + "</Version>") |> Some)
 
@@ -192,11 +194,12 @@ let pushNuget (newVersion: string) (projFile: string) =
         |> Array.find (fun nupkg -> nupkg.Contains(newVersion))
         |> fun x -> [x]
 
-    Paket.pushFiles (fun o ->
-        { o with ApiKey = nugetKey
-                 PublishUrl = "https://www.nuget.org/api/v2/package"
-                 WorkingDir = __SOURCE_DIRECTORY__ })
-        files
+    if needsPublishing then
+        Paket.pushFiles (fun o ->
+            { o with ApiKey = nugetKey
+                     PublishUrl = "https://www.nuget.org/api/v2/package"
+                     WorkingDir = __SOURCE_DIRECTORY__ })
+            files
 
 let versionRegex = Regex("^## ?\\[?v?([\\w\\d.-]+\\.[\\w\\d.-]+[a-zA-Z0-9])\\]?", RegexOptions.IgnoreCase)
 
