@@ -1082,26 +1082,43 @@ module Decode =
         | None -> Map.empty
         | Some e -> Map.map (fun _ (_,dec) -> ref dec) e
 
+    module Auto =
+
+        /// This API  is only implemented inside Thoth.Json.Net for now
+        /// The goal of this API is to provide better interop when consuming Thoth.Json.Net from a C# project
+        type LowLevel =
+            /// ATTENTION: Use this only when other arguments (isCamelCase, extra) don't change
+            static member generateDecoderCached<'T> (t:System.Type, ?isCamelCase : bool, ?extra: ExtraCoders): Decoder<'T> =
+                let decoderCrate =
+                    Cache.Decoders.Value.GetOrAdd(t, fun t ->
+                        let isCamelCase = defaultArg isCamelCase false
+                        autoDecoder (makeExtra extra) isCamelCase false t)
+                fun path token ->
+                    match decoderCrate.Decode(path, token) with
+                    | Ok x -> Ok(x :?> 'T)
+                    | Error er -> Error er
+
+            static member generateDecoder<'T> (t: System.Type, ?isCamelCase : bool, ?extra: ExtraCoders): Decoder<'T> =
+                let isCamelCase = defaultArg isCamelCase false
+                let decoderCrate = autoDecoder (makeExtra extra) isCamelCase false t
+                fun path token ->
+                    match decoderCrate.Decode(path, token) with
+                    | Ok x -> Ok(x :?> 'T)
+                    | Error er -> Error er
+
+            static member fromString<'T>(json: string, t: System.Type, ?isCamelCase : bool, ?extra: ExtraCoders): Result<'T, string> =
+                let decoder = LowLevel.generateDecoder(t, ?isCamelCase=isCamelCase, ?extra=extra)
+                fromString decoder json
+
     type Auto =
         /// ATTENTION: Use this only when other arguments (isCamelCase, extra) don't change
         static member generateDecoderCached<'T> (?isCamelCase : bool, ?extra: ExtraCoders): Decoder<'T> =
             let t = typeof<'T>
-            let decoderCrate =
-                Cache.Decoders.Value.GetOrAdd(t, fun t ->
-                    let isCamelCase = defaultArg isCamelCase false
-                    autoDecoder (makeExtra extra) isCamelCase false t)
-            fun path token ->
-                match decoderCrate.Decode(path, token) with
-                | Ok x -> Ok(x :?> 'T)
-                | Error er -> Error er
+            Auto.LowLevel.generateDecoderCached (t, ?isCamelCase = isCamelCase, ?extra = extra)
 
         static member generateDecoder<'T> (?isCamelCase : bool, ?extra: ExtraCoders): Decoder<'T> =
-            let isCamelCase = defaultArg isCamelCase false
-            let decoderCrate = autoDecoder (makeExtra extra) isCamelCase false typeof<'T>
-            fun path token ->
-                match decoderCrate.Decode(path, token) with
-                | Ok x -> Ok(x :?> 'T)
-                | Error er -> Error er
+            let t = typeof<'T>
+            Auto.LowLevel.generateDecoder(t, ?isCamelCase = isCamelCase, ?extra = extra)
 
         static member fromString<'T>(json: string, ?isCamelCase : bool, ?extra: ExtraCoders): Result<'T, string> =
             let decoder = Auto.generateDecoder(?isCamelCase=isCamelCase, ?extra=extra)
