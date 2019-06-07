@@ -1,14 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>Elm-inspired encoder and decoder for JSON targetting .Net and NetCore runtime</Description>
-    <PackageProjectUrl>https://github.com/thoth-org/Thoth.Json.Net</PackageProjectUrl>
-    <Packagelicense>https://github.com/thoth-org/Thoth.Json.Net/blob/master/LICENSE.md</Packagelicense>
-    <RepositoryUrl>https://github.com/thoth-org/Thoth.Json.Net</RepositoryUrl>
-    <PackageTags>fsharp;json</PackageTags>
-    <Authors>Maxime Mangel</Authors>
-    <Version>3.4.0</Version>
-  </PropertyGroup>
-  <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

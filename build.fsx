@@ -37,6 +37,7 @@ let root = __SOURCE_DIRECTORY__
 module Source =
     let dir = root </> "src"
     let projectFile = dir </> "Thoth.Json.Net.fsproj"
+    let paketTemplate = dir </> "paket.template"
 
 module Tests =
     let dir = root </> "tests"
@@ -173,7 +174,7 @@ let needsPublishing (versionRegex: Regex) (newVersion: string) projFile =
                 not sameVersion
 
 let pushNuget (newVersion: string) (projFile: string) =
-    let versionRegex = Regex("<Version>(.*?)</Version>", RegexOptions.IgnoreCase)
+    let versionRegex = Regex("version\\s(.*?)", RegexOptions.IgnoreCase)
 
     let nugetKey =
         match Environment.environVarOrNone "NUGET_KEY" with
@@ -183,7 +184,7 @@ let pushNuget (newVersion: string) (projFile: string) =
     let needsPublishing = needsPublishing versionRegex newVersion projFile
 
     (versionRegex, projFile) ||> Util.replaceLines (fun line _ ->
-        versionRegex.Replace(line, "<Version>" + newVersion + "</Version>") |> Some)
+        versionRegex.Replace(line, "version " + newVersion) |> Some)
 
     Paket.pack (fun p ->
         { p with BuildConfig = "Release"
@@ -237,7 +238,7 @@ let getNotes (version : string) =
 
 Target.create "Publish" (fun _ ->
     let version = getLastVersion()
-    pushNuget version Source.projectFile
+    pushNuget version Source.paketTemplate
 )
 
 Target.create "Release" (fun _ ->
