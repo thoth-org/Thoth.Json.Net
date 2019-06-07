@@ -17,6 +17,8 @@ trigger:
 
 pr:
 - master
+- develop
+- vNext
 
 pool:
   vmImage: $(imageName)
