@@ -240,20 +240,25 @@ Target.create "Publish" (fun _ ->
 Target.create "Release" (fun _ ->
     let version = getLastVersion()
 
-    Git.Staging.stageAll root
-    let commitMsg = sprintf "Release version %s" version
-    Git.Commit.exec root commitMsg
-    Git.Branches.push root
+    match Git.Information.getBranchName root with
+    | "master" ->
+        Git.Staging.stageAll root
+        let commitMsg = sprintf "Release version %s" version
+        Git.Commit.exec root commitMsg
+        Git.Branches.push root
 
-    let token =
-        match Environment.environVarOrDefault "GITHUB_TOKEN" "" with
-        | s when not (System.String.IsNullOrWhiteSpace s) -> s
-        | _ -> failwith "The Github token must be set in a GITHUB_TOKEN environmental variable"
+        let token =
+            match Environment.environVarOrDefault "GITHUB_TOKEN" "" with
+            | s when not (System.String.IsNullOrWhiteSpace s) -> s
+            | _ -> failwith "The Github token must be set in a GITHUB_TOKEN environmental variable"
 
-    GitHub.createClientWithToken token
-    |> GitHub.draftNewRelease gitOwner repoName version (isPreRelease version) (getNotes version)
-    |> GitHub.publishDraft
-    |> Async.RunSynchronously
+        GitHub.createClientWithToken token
+        |> GitHub.draftNewRelease gitOwner repoName version (isPreRelease version) (getNotes version)
+        |> GitHub.publishDraft
+        |> Async.RunSynchronously
+
+    | _ -> failwith "You need to be on the master branch in order to create a Github Release"
+
 )
 
 "Clean"
