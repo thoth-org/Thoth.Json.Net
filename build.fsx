@@ -250,13 +250,8 @@ Target.create "Release" (fun _ ->
         | s when not (System.String.IsNullOrWhiteSpace s) -> s
         | _ -> failwith "The Github token must be set in a GITHUB_TOKEN environmental variable"
 
-    let nupkg =
-        Directory.GetFiles(root </> "temp", "*.nupkg")
-        |> Array.find (fun nupkg -> nupkg.Contains(version))
-
     GitHub.createClientWithToken token
     |> GitHub.draftNewRelease gitOwner repoName version (isPreRelease version) (getNotes version)
-    |> GitHub.uploadFile nupkg
     |> GitHub.publishDraft
     |> Async.RunSynchronously
 )
