@@ -510,21 +510,26 @@ module Encode =
         | None -> Map.empty
         | Some e -> Map.map (fun _ (enc,_) -> ref enc) e
 
+    module Auto =
+
+        /// This API  is only implemented inside Thoth.Json.Net for now
+        /// The goal of this API is to provide better interop when consuming Thoth.Json.Net from a C# project
+        type LowLevel =
+            /// ATTENTION: Use this only when other arguments (isCamelCase, extra) don't change
+            static member generateEncoderCached<'T> (t: System.Type, ?isCamelCase : bool, ?extra: ExtraCoders): Encoder<'T> =
+                let encoderCrate =
+                    Cache.Encoders.Value.GetOrAdd(t, fun t ->
+                        let isCamelCase = defaultArg isCamelCase false
+                        autoEncoder (makeExtra extra) isCamelCase t)
+
+                fun (value: 'T) ->
+                    encoderCrate .Encode value
+
     type Auto =
         /// ATTENTION: Use this only when other arguments (isCamelCase, extra) don't change
-        static member generateEncoderCached(t: System.Type, ?isCamelCase : bool, ?extra: ExtraCoders): Encoder<obj> =
-            Cache.Encoders.Value.GetOrAdd(t, fun t ->
-                let isCamelCase = defaultArg isCamelCase false
-                autoEncoder (makeExtra extra) isCamelCase t).BoxedEncoder
-
         static member generateEncoderCached<'T>(?isCamelCase : bool, ?extra: ExtraCoders): Encoder<'T> =
             let t = typeof<'T>
-            let encoderCrate =
-                Cache.Encoders.Value.GetOrAdd(t, fun t ->
-                    let isCamelCase = defaultArg isCamelCase false
-                    autoEncoder (makeExtra extra) isCamelCase t)
-            fun (value: 'T) ->
-                encoderCrate.Encode value
+            Auto.LowLevel.generateEncoderCached(t, ?isCamelCase = isCamelCase, ?extra = extra)
 
         static member generateEncoder<'T>(?isCamelCase : bool, ?extra: ExtraCoders): Encoder<'T> =
             let isCamelCase = defaultArg isCamelCase false

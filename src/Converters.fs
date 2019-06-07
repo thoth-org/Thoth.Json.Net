@@ -13,7 +13,7 @@ module Converters =
 
         override __.WriteJson(writer, value, _serializer) =
             let t = value.GetType ()
-            let encoder = Encode.Auto.generateEncoderCached(t, ?isCamelCase=isCamelCase, ?extra=extra)
+            let encoder = Encode.Auto.LowLevel.generateEncoderCached(t, ?isCamelCase=isCamelCase, ?extra=extra)
             (encoder value).WriteTo(writer)
             writer.Flush()
 
