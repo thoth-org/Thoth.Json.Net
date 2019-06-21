@@ -188,7 +188,8 @@ let pushNuget (newVersion: string) (projFile: string) =
 
     Paket.pack (fun p ->
         { p with BuildConfig = "Release"
-                 Version = newVersion } )
+                 Version = newVersion
+                 Symbols = true } )
 
     let files =
         Directory.GetFiles(root </> "temp", "*.nupkg")
