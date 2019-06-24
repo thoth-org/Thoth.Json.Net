@@ -6,7 +6,7 @@ storage:none
 nuget FSharp.Core redirects:force
 nuget Newtonsoft.Json >= 11.0.2 lowest_matching:true
 nuget Expecto
-nuget Fable.Core framework: netstandard2.0
+nuget Fable.Core ~> 3 framework: netstandard2.0
 
 group tests
     # Get the tests from Thoth.Json repo so both project are in sync

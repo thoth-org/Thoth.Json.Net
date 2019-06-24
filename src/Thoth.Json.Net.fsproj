@@ -1,14 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-  </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="Types.fs" />
-    <Compile Include="Decode.fs" />
-    <Compile Include="Encode.fs" />
-    <Compile Include="Extra.fs" />
-    <Compile Include="Converters.fs" />
-  </ItemGroup>
-  <Import Project="..\.paket\Paket.Restore.targets" />
+    <PropertyGroup>
+        <Description>Elm-inspired encoder and decoder for JSON targetting .Net and NetCore runtime</Description>
+        <PackageProjectUrl>https://github.com/thoth-org/Thoth.Json.Net</PackageProjectUrl>
+        <Packagelicense>https://github.com/thoth-org/Thoth.Json.Net/blob/master/LICENSE.md</Packagelicense>
+        <RepositoryUrl>https://github.com/thoth-org/Thoth.Json.Net</RepositoryUrl>
+        <PackageTags>fsharp;json</PackageTags>
+        <Authors>Maxime Mangel</Authors>
+        <Version>3.5.0</Version>
+    </PropertyGroup>
+    <PropertyGroup>
+        <TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Condition="'$(TargetFramework)' == 'netstandard2.0'" Include="Fable.Core" Version="[3.0,4.0)" />
+    </ItemGroup>
+    <ItemGroup>
+        <Compile Include="Types.fs" />
+        <Compile Include="Decode.fs" />
+        <Compile Include="Encode.fs" />
+        <Compile Include="Extra.fs" />
+        <Compile Include="Converters.fs" />
+    </ItemGroup>
+    <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

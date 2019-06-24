@@ -37,7 +37,6 @@ let root = __SOURCE_DIRECTORY__
 module Source =
     let dir = root </> "src"
     let projectFile = dir </> "Thoth.Json.Net.fsproj"
-    let paketTemplate = dir </> "paket.template"
 
 module Tests =
     let dir = root </> "tests"
@@ -174,7 +173,7 @@ let needsPublishing (versionRegex: Regex) (newVersion: string) projFile =
                 not sameVersion
 
 let pushNuget (newVersion: string) (projFile: string) =
-    let versionRegex = Regex("^version\\s(.*?)$", RegexOptions.IgnoreCase)
+    let versionRegex = Regex("<Version>(.*?)</Version>", RegexOptions.IgnoreCase)
 
     let nugetKey =
         match Environment.environVarOrNone "NUGET_KEY" with
@@ -184,11 +183,12 @@ let pushNuget (newVersion: string) (projFile: string) =
     let needsPublishing = needsPublishing versionRegex newVersion projFile
 
     (versionRegex, projFile) ||> Util.replaceLines (fun line _ ->
-        versionRegex.Replace(line, "version " + newVersion) |> Some)
+        versionRegex.Replace(line, "<Version>" + newVersion + "</Version>") |> Some)
 
-    Paket.pack (fun p ->
-        { p with BuildConfig = "Release"
-                 Version = newVersion } )
+    DotNet.pack (fun p ->
+            DotNet.Options.lift dotnetSdk.Value p
+        )
+        projFile
 
     let files =
         Directory.GetFiles(root </> "temp", "*.nupkg")
@@ -238,30 +238,26 @@ let getNotes (version : string) =
 
 Target.create "Publish" (fun _ ->
     let version = getLastVersion()
-    pushNuget version Source.paketTemplate
+    pushNuget version Source.projectFile
 )
 
 Target.create "Release" (fun _ ->
     let version = getLastVersion()
 
-    match Git.Information.getBranchName root with
-    | "master" ->
-        Git.Staging.stageAll root
-        let commitMsg = sprintf "Release version %s" version
-        Git.Commit.exec root commitMsg
-        Git.Branches.push root
+    Git.Staging.stageAll root
+    let commitMsg = sprintf "Release version %s" version
+    Git.Commit.exec root commitMsg
+    Git.Branches.push root
 
-        let token =
-            match Environment.environVarOrDefault "GITHUB_TOKEN" "" with
-            | s when not (System.String.IsNullOrWhiteSpace s) -> s
-            | _ -> failwith "The Github token must be set in a GITHUB_TOKEN environmental variable"
+    let token =
+        match Environment.environVarOrDefault "GITHUB_TOKEN" "" with
+        | s when not (System.String.IsNullOrWhiteSpace s) -> s
+        | _ -> failwith "The Github token must be set in a GITHUB_TOKEN environmental variable"
 
-        GitHub.createClientWithToken token
-        |> GitHub.draftNewRelease gitOwner repoName version (isPreRelease version) (getNotes version)
-        |> GitHub.publishDraft
-        |> Async.RunSynchronously
-
-    | _ -> failwith "You need to be on the master branch in order to create a Github Release"
+    GitHub.createClientWithToken token
+    |> GitHub.draftNewRelease gitOwner repoName version (isPreRelease version) (getNotes version)
+    |> GitHub.publishDraft
+    |> Async.RunSynchronously
 
 )
 
