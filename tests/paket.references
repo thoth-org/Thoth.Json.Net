@@ -2,6 +2,7 @@ FSharp.Core
 Expecto
 Fable.Core
 
-File: Types.fs
-File: Encoders.fs
-File: Decoders.fs
+group Tests
+    File: Types.fs
+    File: Encoders.fs
+    File: Decoders.fs

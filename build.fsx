@@ -120,7 +120,7 @@ Target.create "AdaptTest" (fun _ ->
       "Decoders.fs"
       "Encoders.fs" ]
     |> List.map (fun fileName ->
-         root </> "paket-files" </> "thoth-org" </> "Thoth.Json" </> "tests" </> fileName
+         root </> "paket-files" </> "tests" </> "thoth-org" </> "Thoth.Json" </> "tests" </> fileName
     )
     |> List.iter (fun path ->
         File.ReadLines path
