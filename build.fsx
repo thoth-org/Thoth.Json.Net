@@ -190,8 +190,10 @@ let pushNuget (newVersion: string) (projFile: string) =
         )
         projFile
 
+    let projDir = Path.GetDirectoryName(projFile)
+
     let files =
-        Directory.GetFiles(root </> "temp", "*.nupkg")
+        Directory.GetFiles(projDir </> "bin" </> "Release", "*.nupkg")
         |> Array.find (fun nupkg -> nupkg.Contains(newVersion))
         |> fun x -> [x]
 

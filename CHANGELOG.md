@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 3.5.1-beta-001 - 2019-06-24
+### Changed
+
+* Stop using first person when reporting an error. Related to https://github.com/thoth-org/Thoth.Json/issues/19
+* Use `dotnet pack` to generate the package
+* Add upper restriction to `Fable.Core`
+
 ## 3.5.0 - 2019-06-24
 ### Changed
 
