@@ -1,7 +1,7 @@
 type file
 
 id Thoth.Json.Net
-version 3.5.0-beta-001
+version 3.5.0
 title Thoth.Json.Net
 authors Maxime Mangel
 description Elm-inspired encoder and decoder for JSON targetting .Net and NetCore runtime
