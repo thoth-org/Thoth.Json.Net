@@ -18,7 +18,7 @@ let decodeStringWithConverter<'T> (converter: JsonConverter) (json: string): Res
         Error("Given an invalid JSON: " + ex.Message)
 
 
-type MyUnion = Foo of int
+type MyUnion = Foo of int | Bar
 
 type Record2 =
     { a : float
@@ -71,5 +71,15 @@ let tests : Test =
                     | Error er -> failwith er
                     | Ok r ->
                         equal None r.s
+                        
+            testCase "roundrip with union" <| fun _ ->
+                let converter = Thoth.Json.Net.Converters.Converter false
+                
+                let json = Bar |> encodeWithConverter converter 4  // "Bar"
+                let result = decodeStringWithConverter converter json
+                match result with
+                | Error er -> failwith er
+                | Ok r ->
+                    equal Bar r
         ]
     ]
