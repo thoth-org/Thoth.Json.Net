@@ -126,6 +126,14 @@ module Decode =
             else
                 (path, BadPrimitive("a string", token)) |> Error
 
+    let enum (t:System.Type) : Decoder<_> =
+        fun path token ->
+            if Helpers.isString token then
+                Ok( Helpers.asString token
+                    |> fun text  -> System.Enum.Parse(t,text) )
+            else
+                (path, BadPrimitive("a string", token)) |> Error
+
     let guid : Decoder<System.Guid> =
         fun path value ->
             // Using Helpers.isString fails because Json.NET directly assigns Guid type
@@ -840,6 +848,9 @@ module Decode =
     let boxDecoder (d: Decoder<'T>): BoxedDecoder =
         DecoderCrate(d) :> BoxedDecoder
 
+    
+       
+
     let unboxDecoder<'T> (d: BoxedDecoder): Decoder<'T> =
         (d :?> DecoderCrate<'T>).UnboxedDecoder
 
@@ -1075,6 +1086,8 @@ module Decode =
                 boxDecoder (fun _ v ->
                     if Helpers.isNullValue v then Ok(null: obj)
                     else v.Value<obj>() |> Ok)
+            elif t.IsEnum then
+                boxDecoder (enum t)
             else autoDecodeRecordsAndUnions extra isCamelCase isOptional t
 
     let private makeExtra (extra: ExtraCoders option) =
