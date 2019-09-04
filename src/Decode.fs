@@ -128,9 +128,13 @@ module Decode =
 
     let enum (t:System.Type) : Decoder<_> =
         fun path token ->
-            if Helpers.isString token then
-                Ok( Helpers.asString token
-                    |> fun text  -> System.Enum.Parse(t,text) )
+            if Helpers.isInteger token then
+                // TODO: Is not enough to convert to int directly? Maybe these checks hurt performance?
+                let value = token.Value<decimal> ()
+                if value >= (decimal System.Int32.MinValue) && value <= (decimal System.Int32.MaxValue) then
+                    Ok (int32 value |> fun i -> System.Enum.ToObject(t , i) )
+                else
+                    (path, BadPrimitiveExtra("an enum", token, "Value did not match type.")) |> Error
             else
                 (path, BadPrimitive("a string", token)) |> Error
 
