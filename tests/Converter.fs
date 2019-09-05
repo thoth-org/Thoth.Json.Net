@@ -35,48 +35,70 @@ type Record9 =
       f: System.DateTime
       g: float
       h: bool
-   // i: System.DayOfWeek
+      i: System.DayOfWeek
+      j: MyUnion
+      k: string option
+      l: string option
     }
 
 let tests : Test =
     testList "Thoth.Json.Converter" [
 
-        testList "Decoding with Converter" [
+        testList "Decoding" [
 
-            testCase "works with int" <| fun _ ->
+            testCase "works for int" <| fun _ ->
                let converter = Thoth.Json.Net.Converters.Converter false
                let json = "42"
                decodeStringWithConverter converter json
                |> equal (Ok 42)
-            testCase "works with bool" <| fun _ ->
+
+            testCase "works for bool" <| fun _ ->
                let converter = Thoth.Json.Net.Converters.Converter false
                let json = "true"
                decodeStringWithConverter converter json
                |> equal (Ok true)
 
-            testCase "works with float" <| fun _ ->
+            testCase "works for float" <| fun _ ->
                let converter = Thoth.Json.Net.Converters.Converter false
                let json = "1.2"
                decodeStringWithConverter converter json
                |> equal (Ok 1.2)
                
-            testCase "works with enum" <| fun _ ->
+            testCase "works for enum" <| fun _ ->
                let converter = Thoth.Json.Net.Converters.Converter false
-               let json = "42"
+               let json = "2"
                decodeStringWithConverter converter json
-               |> equal (Ok 42)
+               |> equal (Ok System.DayOfWeek.Tuesday)
 
-            testCase "works with string" <| fun _ ->
+            testCase "works for string" <| fun _ ->
                let converter = Thoth.Json.Net.Converters.Converter false
                let json = "\"maxime\""
                decodeStringWithConverter converter json
                |> equal (Ok "maxime")
 
-            testCase "with simple Union" <| fun _ ->
+            testCase "works for simple Union" <| fun _ ->
                let converter = Thoth.Json.Net.Converters.Converter false
-               let json = "2"
+               let json = "\"Bar\""
                decodeStringWithConverter converter json
-               |> equal (Ok System.DayOfWeek.Tuesday)
+               |> equal (Ok Bar)
+
+            testCase "works for  Union" <| fun _ ->
+               let converter = Thoth.Json.Net.Converters.Converter false
+               let json = "[\r\n\"Foo\",\r\n14\r\n]"
+               decodeStringWithConverter converter json
+               |> equal (Ok <| Foo 14)
+
+            testCase "works for  option none" <| fun _ ->
+               let converter = Thoth.Json.Net.Converters.Converter false
+               let json = "null"
+               decodeStringWithConverter converter json
+               |> equal (Ok <| None)
+
+            testCase "works for  option Some" <| fun _ ->
+                let converter = Thoth.Json.Net.Converters.Converter false
+                let json = "\"Maxine\""
+                decodeStringWithConverter converter json
+                |> equal (Ok <| Some "Maxine") 
 
         ]
         
@@ -92,7 +114,10 @@ let tests : Test =
                       f = System.DateTime.Now
                       g = 1.2
                       h = false
-                   // i = System.DayOfWeek.Tuesday
+                      i = System.DayOfWeek.Tuesday
+                      j = Bar
+                      k = Some "maxine"
+                      l = None
                     } |> encodeWithConverter converter 4
                 let result = decodeStringWithConverter converter json
                 match result with
@@ -107,21 +132,32 @@ let tests : Test =
                     equal 1.2   r2.g
                     equal false r2.h
                     equal System.DayOfWeek.Tuesday r2.i
+                    equal Bar r2.j
+                    equal (Some "maxine") r2.k
+                    equal None r2.l
 
-            testCase "roundtrip with option" <| fun _ ->
-                    let converter = Thoth.Json.Net.Converters.Converter false
-                    let json =
-                        { s = None
-                        } |> encodeWithConverter converter 4
-                    let result = decodeStringWithConverter converter json
-                    match result with
-                    | Error er -> failwith er
-                    | Ok r ->
-                        equal None r.s
+            testCase "roundtrip with option/ None" <| fun _ ->
+                let converter = Thoth.Json.Net.Converters.Converter false
+                let json =
+                    { s = None
+                    } |> encodeWithConverter converter 4
+                let result = decodeStringWithConverter converter json
+                match result with
+                | Error er -> failwith er
+                | Ok r ->
+                    equal None r.s
+
+            testCase "roundtrip with option / Some string" <| fun _ ->
+                let converter = Thoth.Json.Net.Converters.Converter false
+                let json = Some "maxine" |> encodeWithConverter converter 4
+                let result = decodeStringWithConverter converter json
+                match result with
+                | Error er -> failwith er
+                | Ok r ->
+                    equal (Some "maxine") r.s
                         
             testCase "roundrip with union" <| fun _ ->
                 let converter = Thoth.Json.Net.Converters.Converter false
-                
                 let json = Bar |> encodeWithConverter converter 4  // "Bar"
                 let result = decodeStringWithConverter converter json
                 match result with
