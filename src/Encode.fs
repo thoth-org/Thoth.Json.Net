@@ -189,9 +189,8 @@ module Encode =
     let timespan (value : System.TimeSpan) : JsonValue =
         JValue(value.ToString()) :> JsonValue
 
-    let enum (value: 'T when 'T:enum<int>) =
-        LanguagePrimitives.EnumToValue value
-        |> JValue :> JsonValue
+    let enum (value) =
+        value |> int32 |> int
 
     let tuple2
             (enc1 : Encoder<'T1>)
@@ -514,7 +513,7 @@ module Encode =
             elif fullname = typeof<System.Guid>.FullName then
                 boxEncoder guid
             elif t.IsEnum then
-                boxEncoder (int32 >> int)
+                boxEncoder enum
             elif fullname = typeof<obj>.FullName then
                 boxEncoder(fun (v: obj) -> JValue(v) :> JsonValue)
             else
