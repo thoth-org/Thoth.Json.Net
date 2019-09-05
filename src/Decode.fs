@@ -852,9 +852,6 @@ module Decode =
     let boxDecoder (d: Decoder<'T>): BoxedDecoder =
         DecoderCrate(d) :> BoxedDecoder
 
-    
-       
-
     let unboxDecoder<'T> (d: BoxedDecoder): Decoder<'T> =
         (d :?> DecoderCrate<'T>).UnboxedDecoder
 
