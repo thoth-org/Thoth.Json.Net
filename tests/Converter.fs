@@ -3,6 +3,7 @@ module Tests.Converter
 open Newtonsoft.Json
 open Expecto
 open Util.Testing
+open Thoth.Json.Net
 
 let encodeWithConverter<'T> (converter: JsonConverter) (space: int) (value: obj) : string =
     let format = if space = 0 then Formatting.None else Formatting.Indented
@@ -32,14 +33,54 @@ type Record9 =
       d: MyUnion
       e: Map<string, Record2>
       f: System.DateTime
+      g: float
+      h: bool
+   // i: System.DayOfWeek
     }
-
-
 
 let tests : Test =
     testList "Thoth.Json.Converter" [
 
-        testList "Basic" [
+        testList "Decoding with Converter" [
+
+            testCase "works with int" <| fun _ ->
+               let converter = Thoth.Json.Net.Converters.Converter false
+               let json = "42"
+               decodeStringWithConverter converter json
+               |> equal (Ok 42)
+            testCase "works with bool" <| fun _ ->
+               let converter = Thoth.Json.Net.Converters.Converter false
+               let json = "true"
+               decodeStringWithConverter converter json
+               |> equal (Ok true)
+
+            testCase "works with float" <| fun _ ->
+               let converter = Thoth.Json.Net.Converters.Converter false
+               let json = "1.2"
+               decodeStringWithConverter converter json
+               |> equal (Ok 1.2)
+               
+            testCase "works with enum" <| fun _ ->
+               let converter = Thoth.Json.Net.Converters.Converter false
+               let json = "42"
+               decodeStringWithConverter converter json
+               |> equal (Ok 42)
+
+            testCase "works with string" <| fun _ ->
+               let converter = Thoth.Json.Net.Converters.Converter false
+               let json = "\"maxime\""
+               decodeStringWithConverter converter json
+               |> equal (Ok "maxime")
+
+            testCase "with simple Union" <| fun _ ->
+               let converter = Thoth.Json.Net.Converters.Converter false
+               let json = "2"
+               decodeStringWithConverter converter json
+               |> equal (Ok System.DayOfWeek.Tuesday)
+
+        ]
+        
+        testList "Roundtrips" [
             testCase "roundtrip works" <| fun _ ->
                 let converter = Thoth.Json.Net.Converters.Converter false
                 let json =
@@ -49,6 +90,9 @@ let tests : Test =
                       d = Foo 14
                       e = Map [("oh", { a = 2.; b = 2. }); ("ah", { a = -1.5; b = 0. })]
                       f = System.DateTime.Now
+                      g = 1.2
+                      h = false
+                   // i = System.DayOfWeek.Tuesday
                     } |> encodeWithConverter converter 4
                 let result = decodeStringWithConverter converter json
                 match result with
@@ -60,6 +104,9 @@ let tests : Test =
                     equal (Foo 14) r2.d
                     equal -1.5 (Map.find "ah" r2.e).a
                     equal 2.   (Map.find "oh" r2.e).b
+                    equal 1.2   r2.g
+                    equal false r2.h
+                    equal System.DayOfWeek.Tuesday r2.i
 
             testCase "roundtrip with option" <| fun _ ->
                     let converter = Thoth.Json.Net.Converters.Converter false
@@ -81,5 +128,5 @@ let tests : Test =
                 | Error er -> failwith er
                 | Ok r ->
                     equal Bar r
-        ]
+        ] 
     ]
