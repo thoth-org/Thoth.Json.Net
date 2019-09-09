@@ -20,7 +20,6 @@
         <Compile Include="Decode.fs" />
         <Compile Include="Encode.fs" />
         <Compile Include="Extra.fs" />
-        <Compile Include="Converters.fs" />
     </ItemGroup>
     <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>
