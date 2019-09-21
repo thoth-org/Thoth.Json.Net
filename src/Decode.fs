@@ -95,10 +95,11 @@ module Decode =
     let fromString (decoder : Decoder<'T>) =
         fun value ->
             try
-                use reader = new JsonTextReader(new StringReader(value), DateParseHandling = DateParseHandling.None)
-
-                let json = Newtonsoft.Json.Linq.JValue.ReadFrom reader
-                fromValue "$" decoder json
+                if value = "" then unbox () |> Ok 
+                else 
+                    use reader = new JsonTextReader(new StringReader(value), DateParseHandling = DateParseHandling.None)
+                    let json = Newtonsoft.Json.Linq.JValue.ReadFrom reader
+                    fromValue "$" decoder json
             with
                 | :? Newtonsoft.Json.JsonReaderException as ex ->
                     Error("Given an invalid JSON: " + ex.Message)
@@ -148,6 +149,10 @@ module Decode =
                 | true, x -> Ok x
                 | _ -> (path, BadPrimitive("a guid", value)) |> Error
             else (path, BadPrimitive("a guid", value)) |> Error
+
+    
+    let unit : Decoder<unit> =
+        fun _ _ -> () |> Ok
 
     let int : Decoder<int> =
         fun path token ->
@@ -1002,6 +1007,8 @@ module Decode =
                     // The error will only happen at runtime if the value is not null
                     // See https://github.com/MangelMaxime/Thoth/pull/84#issuecomment-444837773
                     boxDecoder(fun path value -> Error(path, BadType("an extra coder for " + t.FullName, value)))
+                elif t.FullName = typedefof<unit>.FullName then
+                    boxDecoder unit
                 else
                     failwithf "Cannot generate auto decoder for %s. Please pass an extra decoder." t.FullName
         decoderRef := decoder

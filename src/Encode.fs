@@ -180,6 +180,9 @@ module Encode =
     let uint64 (value : uint64) : JsonValue =
         JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
 
+    let unit () : JsonValue =
+        null // There is no valid JsonValue for unit
+
     let datetime (value : System.DateTime) : JsonValue =
         JValue(value.ToString("O", CultureInfo.InvariantCulture)) :> JsonValue
 
@@ -292,15 +295,17 @@ module Encode =
     ///**Exceptions**
     ///
     let toString (space: int) (token: JsonValue) : string =
-        let format = if space = 0 then Formatting.None else Formatting.Indented
-        use stream = new StringWriter(NewLine = "\n")
-        use jsonWriter = new JsonTextWriter(
-                                stream,
-                                Formatting = format,
-                                Indentation = space )
+        if isNull token then "" // Unit
+        else
+            let format = if space = 0 then Formatting.None else Formatting.Indented
+            use stream = new StringWriter(NewLine = "\n")
+            use jsonWriter = new JsonTextWriter(
+                                    stream,
+                                    Formatting = format,
+                                    Indentation = space )
 
-        token.WriteTo(jsonWriter)
-        stream.ToString()
+            token.WriteTo(jsonWriter)
+            stream.ToString()
 
     //////////////////
     // Reflection ///
@@ -414,6 +419,8 @@ module Encode =
                             let encoder = autoEncoder extra isCamelCase fieldTypes.[i-1].PropertyType
                             target.[i] <- encoder.Encode(fields.[i-1])
                         array target)
+            elif t.FullName = typedefof<unit>.FullName then
+                        boxEncoder unit
             else
                 failwithf "Cannot generate auto encoder for %s. Please pass an extra encoder." t.FullName
         encoderRef := encoder
