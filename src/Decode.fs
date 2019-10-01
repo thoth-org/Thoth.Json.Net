@@ -24,6 +24,7 @@ module Decode =
         let inline getField (fieldName: string) (token: JsonValue) = token.Item(fieldName)
         let inline isBool (token: JsonValue) = not(isNull token) && token.Type = JTokenType.Boolean
         let inline isNumber (token: JsonValue) = not(isNull token) && (token.Type = JTokenType.Float || token.Type = JTokenType.Integer)
+        let inline isIntegralValue (token: JsonValue) = not(isNull token) && (token.Type = JTokenType.Integer)
         let inline isInteger (token: JsonValue) = not(isNull token) && (token.Type = JTokenType.Integer)
         let inline isString (token: JsonValue) = not(isNull token) && token.Type = JTokenType.String
         let inline isGuid (token: JsonValue) = not(isNull token) && token.Type = JTokenType.Guid
@@ -35,6 +36,7 @@ module Decode =
         let inline asBool (token: JsonValue): bool = token.Value<bool>()
         let inline asInt (token: JsonValue): int = token.Value<int>()
         let inline asFloat (token: JsonValue): float = token.Value<float>()
+        let inline asFloat32 (token: JsonValue): float32 = token.Value<float32>()
         let inline asDecimal (token: JsonValue): System.Decimal = token.Value<System.Decimal>()
         let inline asString (token: JsonValue): string = token.Value<string>()
         let inline asArray (token: JsonValue): JsonValue[] = token.Value<JArray>().Values() |> Seq.toArray
@@ -137,59 +139,101 @@ module Decode =
                 | _ -> (path, BadPrimitive("a guid", value)) |> Error
             else (path, BadPrimitive("a guid", value)) |> Error
 
-    let int : Decoder<int> =
-        fun path token ->
-            if Helpers.isInteger token then
-                // TODO: Is not enough to convert to int directly? Maybe these checks hurt performance?
-                let value = token.Value<decimal> ()
-                if value >= (decimal System.Int32.MinValue) && value <= (decimal System.Int32.MaxValue) then
-                    Ok (int32 value)
-                else
-                    (path, BadPrimitiveExtra("an int", token, "Value was either too large or too small for an int")) |> Error
-            elif Helpers.isString token then
-                match System.Int32.TryParse (Helpers.asString token, NumberStyles.Any, CultureInfo.InvariantCulture) with
-                | true, x -> Ok x
-                | _ -> (path, BadPrimitive("an int", token)) |> Error
+    let unit : Decoder<unit> =
+        fun path value ->
+            if Helpers.isNullValue value then
+                Ok ()
             else
-                (path, BadPrimitive("an int", token)) |> Error
+                (path, BadPrimitive("null", value)) |> Error
 
-    let int64 : Decoder<int64> =
-        fun path token ->
-            if Helpers.isInteger token then
-                Ok(token.Value<int64>())
-            elif Helpers.isString token then
-                match System.Int64.TryParse (Helpers.asString token, NumberStyles.Any, CultureInfo.InvariantCulture) with
+    let inline private integral
+                    (name : string)
+                    (tryParse : (string -> bool * 'T))
+                    (min : 'T)
+                    (max : 'T)
+                    (conv : float -> 'T) : Decoder< 'T > =
+
+        fun path value ->
+            if Helpers.isNumber value then
+                if Helpers.isIntegralValue value then
+                    let fValue = Helpers.asFloat value
+                    if (float min) <= fValue && fValue <= (float max) then
+                        Ok(conv fValue)
+                    else
+                        (path, BadPrimitiveExtra(name, value, "Value was either too large or too small for " + name)) |> Error
+                else
+                    (path, BadPrimitiveExtra(name, value, "Value is not an integral value")) |> Error
+            elif Helpers.isString value then
+                match tryParse (Helpers.asString value) with
                 | true, x -> Ok x
-                | _ -> (path, BadPrimitive("an int64", token)) |> Error
-            else (path, BadPrimitive("an int64", token)) |> Error
+                | _ -> (path, BadPrimitive(name, value)) |> Error
+            else
+                (path, BadPrimitive(name, value)) |> Error
+
+    let sbyte : Decoder<sbyte> =
+        integral
+            "a sbyte"
+            System.SByte.TryParse
+            System.SByte.MinValue
+            System.SByte.MaxValue
+            sbyte
+
+    /// Alias to Decode.uint8
+    let byte : Decoder<byte> =
+        integral
+            "a byte"
+            System.Byte.TryParse
+            System.Byte.MinValue
+            System.Byte.MaxValue
+            byte
+
+    let int16 : Decoder<int16> =
+        integral
+            "an int16"
+            System.Int16.TryParse
+            System.Int16.MinValue
+            System.Int16.MaxValue
+            int16
+
+    let uint16 : Decoder<uint16> =
+        integral
+            "an uint16"
+            System.UInt16.TryParse
+            System.UInt16.MinValue
+            System.UInt16.MaxValue
+            uint16
+
+    let int : Decoder<int> =
+        integral
+            "an int"
+            System.Int32.TryParse
+            System.Int32.MinValue
+            System.Int32.MaxValue
+            int
 
     let uint32 : Decoder<uint32> =
-        fun path token ->
-            if Helpers.isInteger token then
-                let value = token.Value<decimal> ()
-                if value >= 0m && value <= (decimal System.UInt32.MaxValue) then
-                    Ok (uint32 value)
-                else
-                    (path, BadPrimitiveExtra("an uint32", token, "Value was either too large or too small for an uint32")) |> Error
-            elif Helpers.isString token then
-                match System.UInt32.TryParse (Helpers.asString token, NumberStyles.Any, CultureInfo.InvariantCulture) with
-                | true, x -> Ok x
-                | _ -> (path, BadPrimitive("an uint32", token)) |> Error
-            else (path, BadPrimitive("an uint32", token)) |> Error
+        integral
+            "an uint32"
+            System.UInt32.TryParse
+            System.UInt32.MinValue
+            System.UInt32.MaxValue
+            uint32
+
+    let int64 : Decoder<int64> =
+        integral
+            "an int64"
+            System.Int64.TryParse
+            System.Int64.MinValue
+            System.Int64.MaxValue
+            int64
 
     let uint64 : Decoder<uint64> =
-        fun path token ->
-            if Helpers.isInteger token then
-                let value = token.Value<decimal>()
-                if value >= 0m && value <= (decimal System.UInt64.MaxValue) then
-                    Ok (uint64 value)
-                else
-                    (path, BadPrimitiveExtra("an uint64", token, "Value was either too large or too small for an uint64")) |> Error
-            elif Helpers.isString token then
-                match System.UInt64.TryParse (Helpers.asString token, NumberStyles.Any, CultureInfo.InvariantCulture) with
-                | true, x -> Ok x
-                | _ -> (path, BadPrimitive("an uint64", token)) |> Error
-            else (path, BadPrimitive("an uint64", token)) |> Error
+        integral
+            "an uint64"
+            System.UInt64.TryParse
+            System.UInt64.MinValue
+            System.UInt64.MaxValue
+            uint64
 
     let bigint : Decoder<bigint> =
         fun path token ->
@@ -213,6 +257,13 @@ module Decode =
         fun path token ->
             if Helpers.isNumber token then
                 Helpers.asFloat token |> Ok
+            else
+                (path, BadPrimitive("a float", token)) |> Error
+
+    let float32 : Decoder<float32> =
+        fun path token ->
+            if Helpers.isNumber token then
+                Helpers.asFloat32 token |> Ok
             else
                 (path, BadPrimitive("a float", token)) |> Error
 
@@ -823,6 +874,54 @@ module Decode =
             )
         )
 
+    ////////////
+    // Enum ///
+    /////////
+
+    module Enum =
+
+        let byte<'TEnum when 'TEnum : enum<byte>> : Decoder<'TEnum> =
+            byte
+            |> andThen (fun value ->
+                LanguagePrimitives.EnumOfValue<byte, 'TEnum> value
+                |> succeed
+            )
+
+        let sbyte<'TEnum when 'TEnum : enum<sbyte>> : Decoder<'TEnum> =
+            sbyte
+            |> andThen (fun value ->
+                LanguagePrimitives.EnumOfValue<sbyte, 'TEnum> value
+                |> succeed
+            )
+
+        let int16<'TEnum when 'TEnum : enum<int16>> : Decoder<'TEnum> =
+            int16
+            |> andThen (fun value ->
+                LanguagePrimitives.EnumOfValue<int16, 'TEnum> value
+                |> succeed
+            )
+
+        let uint16<'TEnum when 'TEnum : enum<uint16>> : Decoder<'TEnum> =
+            uint16
+            |> andThen (fun value ->
+                LanguagePrimitives.EnumOfValue<uint16, 'TEnum> value
+                |> succeed
+            )
+
+        let int<'TEnum when 'TEnum : enum<int>> : Decoder<'TEnum> =
+            int
+            |> andThen (fun value ->
+                LanguagePrimitives.EnumOfValue<int, 'TEnum> value
+                |> succeed
+            )
+
+        let uint32<'TEnum when 'TEnum : enum<uint32>> : Decoder<'TEnum> =
+            uint32
+            |> andThen (fun value ->
+                LanguagePrimitives.EnumOfValue<uint32, 'TEnum> value
+                |> succeed
+            )
+
     //////////////////
     // Reflection ///
     ////////////////
@@ -891,6 +990,22 @@ module Decode =
                         | Error er -> Error er
                         | Ok result -> FSharpValue.MakeUnion(ucis.[1], [|result; acc|], allowAccessToPrivateRepresentation=true) |> Ok)
 
+    let private genericSeq t (decoder: BoxedDecoder) =
+        fun (path : string) (value: JsonValue) ->
+            if not (Helpers.isArray value) then
+                (path, BadPrimitive ("a seq", value)) |> Error
+            else
+                let values = value.Value<JArray>()
+                let ucis = FSharpType.GetUnionCases(t, allowAccessToPrivateRepresentation=true)
+                let empty = FSharpValue.MakeUnion(ucis.[0], [||], allowAccessToPrivateRepresentation=true)
+                (values, Ok empty) ||> Seq.foldBack (fun value acc ->
+                    match acc with
+                    | Error _ -> acc
+                    | Ok acc ->
+                        match decoder.Decode(path, value) with
+                        | Error er -> Error er
+                        | Ok result -> FSharpValue.MakeUnion(ucis.[1], [|result; acc|], allowAccessToPrivateRepresentation=true) |> Ok)
+
     let private (|StringifiableType|_|) (t: System.Type): (string->obj) option =
         let fullName = t.FullName
         if fullName = typeof<string>.FullName then
@@ -899,6 +1014,27 @@ module Decode =
             let ofString = t.GetConstructor([|typeof<string>|])
             Some(fun (v: string) -> ofString.Invoke([|v|]))
         else None
+
+    let inline private enumDecoder<'UnderlineType when 'UnderlineType : equality>
+        (decoder : Decoder<'UnderlineType>)
+        (toString : 'UnderlineType -> string)
+        (t: System.Type) =
+
+            fun path value ->
+                match decoder path value with
+                | Ok enumValue ->
+                    System.Enum.GetValues(t)
+                    |> Seq.cast<'UnderlineType>
+                    |> Seq.contains enumValue
+                    |> function
+                    | true ->
+                        System.Enum.Parse(t, toString enumValue)
+                        |> Ok
+                    | false ->
+                        (path, BadPrimitiveExtra(t.FullName, value, "Unkown value provided for the enum"))
+                        |> Error
+                | Error msg ->
+                    Error msg
 
     let rec private genericMap extra isCamelCase (t: System.Type) =
         let keyType   = t.GenericTypeArguments.[0]
@@ -995,6 +1131,7 @@ module Decode =
         decoderRef := decoder
         decoder
 
+
     and private autoDecoder (extra: Map<string, ref<BoxedDecoder>>) isCamelCase (isOptional : bool) (t: System.Type) : BoxedDecoder =
       let fullname = t.FullName
       match Map.tryFind fullname extra with
@@ -1025,6 +1162,8 @@ module Decode =
                     autoDecoder extra isCamelCase true t.GenericTypeArguments.[0] |> genericOption t |> boxDecoder
                 elif fullname = typedefof<obj list>.FullName then
                     autoDecoder extra isCamelCase false t.GenericTypeArguments.[0] |> genericList t |> boxDecoder
+                elif fullname = typedefof<obj seq>.FullName then
+                    autoDecoder extra isCamelCase false t.GenericTypeArguments.[0] |> genericSeq t |> boxDecoder
                 elif fullname = typedefof< Map<string, obj> >.FullName then
                     genericMap extra isCamelCase t |> boxDecoder
                 elif fullname = typedefof< Set<string> >.FullName then
@@ -1041,17 +1180,55 @@ module Decode =
                         | Error er -> Error er)
                 else
                     autoDecodeRecordsAndUnions extra isCamelCase isOptional t
+        elif t.IsEnum then
+            let enumType = System.Enum.GetUnderlyingType(t).FullName
+            if enumType = typeof<sbyte>.FullName then
+                enumDecoder<sbyte> sbyte Operators.string t |> boxDecoder
+            elif enumType = typeof<byte>.FullName then
+                enumDecoder<byte> byte Operators.string t |> boxDecoder
+            elif enumType = typeof<int16>.FullName then
+                enumDecoder<int16> int16 Operators.string t |> boxDecoder
+            elif enumType = typeof<uint16>.FullName then
+                enumDecoder<uint16> uint16 Operators.string t |> boxDecoder
+            elif enumType = typeof<int>.FullName then
+                enumDecoder<int> int Operators.string t |> boxDecoder
+            elif enumType = typeof<uint32>.FullName then
+                enumDecoder<uint32> uint32 Operators.string t |> boxDecoder
+            else
+                failwithf
+                    """Cannot generate auto encoder for %s.
+Thoth.Json.Net only support the folluwing enum types:
+- sbyte
+- byte
+- int16
+- uint16
+- int
+- uint32
+If you can't use one of these types, please pass an extra encoder.
+                    """ t.FullName
         else
             if fullname = typeof<bool>.FullName then
                 boxDecoder bool
+            elif fullname = typedefof<unit>.FullName then
+                boxDecoder unit
             elif fullname = typeof<string>.FullName then
                 boxDecoder string
+            elif fullname = typeof<sbyte>.FullName then
+                boxDecoder sbyte
+            elif fullname = typeof<byte>.FullName then
+                boxDecoder byte
+            elif fullname = typeof<int16>.FullName then
+                boxDecoder int16
+            elif fullname = typeof<uint16>.FullName then
+                boxDecoder uint16
             elif fullname = typeof<int>.FullName then
                 boxDecoder int
             elif fullname = typeof<uint32>.FullName then
                 boxDecoder uint32
             elif fullname = typeof<float>.FullName then
                 boxDecoder float
+            elif fullname = typeof<float32>.FullName then
+                boxDecoder float32
             // These number types require extra libraries in Fable. To prevent penalizing
             // all users, extra decoders (withInt64, etc) must be passed when they're needed.
 
