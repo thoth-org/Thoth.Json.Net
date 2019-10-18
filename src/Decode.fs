@@ -1196,7 +1196,7 @@ module Decode =
                 enumDecoder<uint32> uint32 Operators.string t |> boxDecoder
             else
                 failwithf
-                    """Cannot generate auto encoder for %s.
+                    """Cannot generate auto decoder for %s.
 Thoth.Json.Net only support the folluwing enum types:
 - sbyte
 - byte
@@ -1204,7 +1204,7 @@ Thoth.Json.Net only support the folluwing enum types:
 - uint16
 - int
 - uint32
-If you can't use one of these types, please pass an extra encoder.
+If you can't use one of these types, please pass an extra decoder.
                     """ t.FullName
         else
             if fullname = typeof<bool>.FullName then
