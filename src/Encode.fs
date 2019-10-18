@@ -55,7 +55,7 @@ module Encode =
         JValue(value) :> JsonValue
 
     ///**Description**
-    /// Encode a Decimal. (Currently decimal gets converted to float.)
+    /// Encode a Decimal.
     ///
     ///**Parameters**
     ///  * `value` - parameter of type `decimal`
