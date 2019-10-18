@@ -21,6 +21,10 @@
       <Paket>True</Paket>
       <Link>paket-files/Decoders.fs</Link>
     </Compile>
+    <Compile Include="..\paket-files\tests\thoth-org\Thoth.Json\tests\ExtraCoders.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/ExtraCoders.fs</Link>
+    </Compile>
     <Compile Include="Converter.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>

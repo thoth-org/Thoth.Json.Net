@@ -117,7 +117,8 @@ let testNetCoreDir = root </> "tests" </> "bin" </> "Release" </> "netcoreapp2.0
 Target.create "AdaptTest" (fun _ ->
     [ "Types.fs"
       "Decoders.fs"
-      "Encoders.fs" ]
+      "Encoders.fs"
+      "ExtraCoders.fs" ]
     |> List.map (fun fileName ->
          root </> "paket-files" </> "tests" </> "thoth-org" </> "Thoth.Json" </> "tests" </> fileName
     )

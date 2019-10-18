@@ -6,3 +6,4 @@ group Tests
     File: Types.fs
     File: Encoders.fs
     File: Decoders.fs
+    File: ExtraCoders.fs
