@@ -990,21 +990,21 @@ module Decode =
                         | Error er -> Error er
                         | Ok result -> FSharpValue.MakeUnion(ucis.[1], [|result; acc|], allowAccessToPrivateRepresentation=true) |> Ok)
 
-    let private genericSeq t (decoder: BoxedDecoder) =
-        fun (path : string) (value: JsonValue) ->
-            if not (Helpers.isArray value) then
-                (path, BadPrimitive ("a seq", value)) |> Error
-            else
-                let values = value.Value<JArray>()
-                let ucis = FSharpType.GetUnionCases(t, allowAccessToPrivateRepresentation=true)
-                let empty = FSharpValue.MakeUnion(ucis.[0], [||], allowAccessToPrivateRepresentation=true)
-                (values, Ok empty) ||> Seq.foldBack (fun value acc ->
-                    match acc with
-                    | Error _ -> acc
-                    | Ok acc ->
-                        match decoder.Decode(path, value) with
-                        | Error er -> Error er
-                        | Ok result -> FSharpValue.MakeUnion(ucis.[1], [|result; acc|], allowAccessToPrivateRepresentation=true) |> Ok)
+    // let private genericSeq t (decoder: BoxedDecoder) =
+    //     fun (path : string) (value: JsonValue) ->
+    //         if not (Helpers.isArray value) then
+    //             (path, BadPrimitive ("a seq", value)) |> Error
+    //         else
+    //             let values = value.Value<JArray>()
+    //             let ucis = FSharpType.GetUnionCases(t, allowAccessToPrivateRepresentation=true)
+    //             let empty = FSharpValue.MakeUnion(ucis.[0], [||], allowAccessToPrivateRepresentation=true)
+    //             (values, Ok empty) ||> Seq.foldBack (fun value acc ->
+    //                 match acc with
+    //                 | Error _ -> acc
+    //                 | Ok acc ->
+    //                     match decoder.Decode(path, value) with
+    //                     | Error er -> Error er
+    //                     | Ok result -> FSharpValue.MakeUnion(ucis.[1], [|result; acc|], allowAccessToPrivateRepresentation=true) |> Ok)
 
     let private (|StringifiableType|_|) (t: System.Type): (string->obj) option =
         let fullName = t.FullName
@@ -1162,8 +1162,9 @@ module Decode =
                     autoDecoder extra isCamelCase true t.GenericTypeArguments.[0] |> genericOption t |> boxDecoder
                 elif fullname = typedefof<obj list>.FullName then
                     autoDecoder extra isCamelCase false t.GenericTypeArguments.[0] |> genericList t |> boxDecoder
-                elif fullname = typedefof<obj seq>.FullName then
-                    autoDecoder extra isCamelCase false t.GenericTypeArguments.[0] |> genericSeq t |> boxDecoder
+                // I don't know for now how to support seq
+                // elif fullname = typedefof<obj seq>.FullName then
+                //     autoDecoder extra isCamelCase false t.GenericTypeArguments.[0] |> genericSeq t |> boxDecoder
                 elif fullname = typedefof< Map<string, obj> >.FullName then
                     genericMap extra isCamelCase t |> boxDecoder
                 elif fullname = typedefof< Set<string> >.FullName then
@@ -1257,7 +1258,7 @@ If you can't use one of these types, please pass an extra decoder.
     let private makeExtra (extra: ExtraCoders option) =
         match extra with
         | None -> Map.empty
-        | Some e -> Map.map (fun _ (_,dec) -> ref dec) e
+        | Some e -> Map.map (fun _ (_,dec) -> ref dec) e.Coders
 
     module Auto =
 
@@ -1266,10 +1267,17 @@ If you can't use one of these types, please pass an extra decoder.
         type LowLevel =
             /// ATTENTION: Use this only when other arguments (isCamelCase, extra) don't change
             static member generateDecoderCached<'T> (t:System.Type, ?isCamelCase : bool, ?extra: ExtraCoders): Decoder<'T> =
+                let isCamelCase = defaultArg isCamelCase false
+
+                let key =
+                    t.FullName
+                    |> (+) (Operators.string isCamelCase)
+                    |> (+) (extra |> Option.map (fun e -> e.Hash) |> Option.defaultValue "")
+
                 let decoderCrate =
-                    Cache.Decoders.Value.GetOrAdd(t, fun t ->
-                        let isCamelCase = defaultArg isCamelCase false
+                    Cache.Decoders.Value.GetOrAdd(key, fun _ ->
                         autoDecoder (makeExtra extra) isCamelCase false t)
+
                 fun path token ->
                     match decoderCrate.Decode(path, token) with
                     | Ok x -> Ok(x :?> 'T)

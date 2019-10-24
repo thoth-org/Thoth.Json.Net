@@ -1404,7 +1404,7 @@ GROUP tests
 
 GITHUB
   remote: thoth-org/Thoth.Json
-    tests/Decoders.fs (1b4ebc37ab2221289df3f110ac29d96efc2e65eb)
-    tests/Encoders.fs (1b4ebc37ab2221289df3f110ac29d96efc2e65eb)
-    tests/ExtraCoders.fs (1b4ebc37ab2221289df3f110ac29d96efc2e65eb)
-    tests/Types.fs (1b4ebc37ab2221289df3f110ac29d96efc2e65eb)
+    tests/Decoders.fs (caf4d3786c1acf1662802a8da27bbc2c48a7bc29)
+    tests/Encoders.fs (caf4d3786c1acf1662802a8da27bbc2c48a7bc29)
+    tests/ExtraCoders.fs (caf4d3786c1acf1662802a8da27bbc2c48a7bc29)
+    tests/Types.fs (caf4d3786c1acf1662802a8da27bbc2c48a7bc29)

@@ -491,8 +491,9 @@ module Encode =
                             let _, fields = FSharpValue.GetUnionFields(value, t, allowAccessToPrivateRepresentation=true)
                             encoder.Value.Encode fields.[0])
                 elif fullname = typedefof<obj list>.FullName
-                    || fullname = typedefof<Set<string>>.FullName
-                    || fullname = typedefof<obj seq>.FullName then
+                    || fullname = typedefof<Set<string>>.FullName then
+                    // I don't know how to support seq for now.
+                    // || fullname = typedefof<obj seq>.FullName
                     t.GenericTypeArguments.[0] |> autoEncoder extra isCamelCase skipNullField |> genericSeq
                 elif fullname = typedefof< Map<string, obj> >.FullName then
                     let keyType = t.GenericTypeArguments.[0]
@@ -595,7 +596,7 @@ If you can't use one of these types, please pass an extra encoder.
     let private makeExtra (extra: ExtraCoders option) =
         match extra with
         | None -> Map.empty
-        | Some e -> Map.map (fun _ (enc,_) -> ref enc) e
+        | Some e -> Map.map (fun _ (enc,_) -> ref enc) e.Coders
 
     module Auto =
 
@@ -604,14 +605,20 @@ If you can't use one of these types, please pass an extra encoder.
         type LowLevel =
             /// ATTENTION: Use this only when other arguments (isCamelCase, extra) don't change
             static member generateEncoderCached<'T> (t: System.Type, ?isCamelCase : bool, ?extra: ExtraCoders, ?skipNullField: bool): Encoder<'T> =
+                let isCamelCase = defaultArg isCamelCase false
+                let skipNullField = defaultArg skipNullField true
+
+                let key =
+                    t.FullName
+                    |> (+) (Operators.string isCamelCase)
+                    |> (+) (extra |> Option.map (fun e -> e.Hash) |> Option.defaultValue "")
+
                 let encoderCrate =
-                    Cache.Encoders.Value.GetOrAdd(t, fun t ->
-                        let isCamelCase = defaultArg isCamelCase false
-                        let skipNullField = defaultArg skipNullField true
+                    Cache.Encoders.Value.GetOrAdd(key, fun _ ->
                         autoEncoder (makeExtra extra) isCamelCase skipNullField t)
 
                 fun (value: 'T) ->
-                    encoderCrate .Encode value
+                    encoderCrate.Encode value
 
     type Auto =
         /// ATTENTION: Use this only when other arguments (isCamelCase, extra) don't change
