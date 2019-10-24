@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+## 3.6.0 - 2019-10-24
+
+### Added
+
+* Add supports for `byte`
+* Add supports for `sbyte`
+* Add supports for `int16>`
+* Add supports for `uint16`
+* Add supports for `uint32`
+* Add supports for `enum<byte>`
+* Add supports for `enum<sbyte>`
+* Add supports for `enum<int16>`
+* Add supports for `enum<uint16>`
+* Add supports for `enum<int>`
+* Add supports for `enum<uint32>`
+* Add support for `unit`
+* Allow to configure if `null` field should be omitted or no. Set `skipNullField` to `false` when using auto encoder, to include `myField: null` in your json output
+
+### Changed
+
+* Fix #18: Remove the cache limitation when using generateDecoderCached (by &SCullman)
+* Fix Encode.decimal comment (by @alfonsogarciacaro)
+
 ## 3.5.1 - 2019-06-24
 ### Changed
 
