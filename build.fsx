@@ -112,7 +112,7 @@ let build project framework =
         { p with Framework = Some framework } ) project
 
 let testNetFrameworkDir = root </> "tests" </> "bin" </> "Release" </> "net461"
-let testNetCoreDir = root </> "tests" </> "bin" </> "Release" </> "netcoreapp2.0"
+let testNetCoreDir = root </> "tests" </> "bin" </> "Release" </> "netcoreapp3.0"
 
 Target.create "AdaptTest" (fun _ ->
     [ "Types.fs"
@@ -120,7 +120,7 @@ Target.create "AdaptTest" (fun _ ->
       "Encoders.fs"
       "ExtraCoders.fs" ]
     |> List.map (fun fileName ->
-         root </> "paket-files" </> "tests" </> "thoth-org" </> "Thoth.Json" </> "tests" </> fileName
+         root </> "paket-files" </> "tests" </> "adz" </> "Thoth.Json" </> "tests" </> fileName
     )
     |> List.iter (fun path ->
         File.ReadLines path
@@ -140,7 +140,7 @@ Target.create "AdaptTest" (fun _ ->
 )
 
 Target.create "Test" (fun _ ->
-    build Tests.projectFile "netcoreapp2.0"
+    build Tests.projectFile "netcoreapp3.0"
     build Tests.projectFile "net461"
 
     if Environment.isUnix then

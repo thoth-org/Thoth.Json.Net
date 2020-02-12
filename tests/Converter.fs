@@ -41,7 +41,7 @@ let tests : Test =
 
         testList "Basic" [
             testCase "roundtrip works" <| fun _ ->
-                let converter = Thoth.Json.Net.Converters.Converter false
+                let converter = Thoth.Json.Net.Converters.Converter Thoth.Json.Net.PascalCase
                 let json =
                     { a = 5
                       b = "bar"
@@ -62,7 +62,7 @@ let tests : Test =
                     equal 2.   (Map.find "oh" r2.e).b
 
             testCase "roundtrip with option" <| fun _ ->
-                    let converter = Thoth.Json.Net.Converters.Converter false
+                    let converter = Thoth.Json.Net.Converters.Converter Thoth.Json.Net.PascalCase
                     let json =
                         { s = None
                         } |> encodeWithConverter converter 4
