@@ -227,7 +227,7 @@ let getNotes (version : string) =
         let m = versionRegex.Match(line)
 
         if m.Success then
-            not (m.Groups.[1].Value = version)
+            (m.Groups.[1].Value <> version)
         else
             true
     )

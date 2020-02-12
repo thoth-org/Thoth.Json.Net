@@ -6,4 +6,5 @@ RUN wget -q https://packages.microsoft.com/config/ubuntu/18.04/packages-microsof
     dpkg -i packages-microsoft-prod.deb && rm -rf packages-microsoft-prod.deb && \
     add-apt-repository universe && \
     apt-get update && apt-get -y -o APT::Install-Suggests="true" install dotnet-sdk-3.1 && \
+    apt-get install -y mono-complete \
     apt -y clean;

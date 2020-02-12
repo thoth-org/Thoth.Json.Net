@@ -8,7 +8,7 @@ tasks:
   - before: >
       rm -rf paket-files &&
       ./fake.sh build
-  - init: ./fake.sh run -t DotnetRestore
+  - init: ./fake.sh build -t DotnetRestore
 
 vscode:
   extensions:
