@@ -272,4 +272,4 @@ Target.create "Release" (fun _ ->
     ==> "Publish"
     ==> "Release"
 
-Target.runOrDefault "Test"
+Target.runOrList ()
