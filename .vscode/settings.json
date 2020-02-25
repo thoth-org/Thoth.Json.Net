@@ -11,7 +11,7 @@
         "**/packages": true,
         "**/node_modules": true,
         "**/bower_components": true,
-        "**/paket-files": true
+        "**/paket-files": false
     },
     "files.trimTrailingWhitespace": true,
     "files.trimFinalNewlines": true,
