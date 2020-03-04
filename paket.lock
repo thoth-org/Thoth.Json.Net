@@ -1397,8 +1397,8 @@ NUGET
 GROUP tests
 
 GITHUB
-  remote: adz/Thoth.Json
-    tests/Decoders.fs (9f079ad6d852d8b8fb36ad3470ed9a345dbea85a)
-    tests/Encoders.fs (9f079ad6d852d8b8fb36ad3470ed9a345dbea85a)
-    tests/ExtraCoders.fs (9f079ad6d852d8b8fb36ad3470ed9a345dbea85a)
-    tests/Types.fs (9f079ad6d852d8b8fb36ad3470ed9a345dbea85a)
+  remote: thoth-org/Thoth.Json
+    tests/Decoders.fs (27570b0bd3188432e214d731763f9e53d0febbeb)
+    tests/Encoders.fs (27570b0bd3188432e214d731763f9e53d0febbeb)
+    tests/ExtraCoders.fs (27570b0bd3188432e214d731763f9e53d0febbeb)
+    tests/Types.fs (27570b0bd3188432e214d731763f9e53d0febbeb)

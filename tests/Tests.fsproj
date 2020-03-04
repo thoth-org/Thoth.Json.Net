@@ -9,19 +9,19 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Util.fs" />
-    <Compile Include="..\paket-files\tests\adz\Thoth.Json\tests\Types.fs">
+    <Compile Include="..\paket-files\tests\thoth-org\Thoth.Json\tests\Types.fs">
       <Paket>True</Paket>
       <Link>paket-files/Types.fs</Link>
     </Compile>
-    <Compile Include="..\paket-files\tests\adz\Thoth.Json\tests\Encoders.fs">
+    <Compile Include="..\paket-files\tests\thoth-org\Thoth.Json\tests\Encoders.fs">
       <Paket>True</Paket>
       <Link>paket-files/Encoders.fs</Link>
     </Compile>
-    <Compile Include="..\paket-files\tests\adz\Thoth.Json\tests\Decoders.fs">
+    <Compile Include="..\paket-files\tests\thoth-org\Thoth.Json\tests\Decoders.fs">
       <Paket>True</Paket>
       <Link>paket-files/Decoders.fs</Link>
     </Compile>
-    <Compile Include="..\paket-files\tests\adz\Thoth.Json\tests\ExtraCoders.fs">
+    <Compile Include="..\paket-files\tests\thoth-org\Thoth.Json\tests\ExtraCoders.fs">
       <Paket>True</Paket>
       <Link>paket-files/ExtraCoders.fs</Link>
     </Compile>
