@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 4.0.0 - 2020-03-04
+
+### Changed
+
+* isCamelCase is now replaced by caseStrategy=CamelCase
+
+### Added
+
+* Added caseStrategy that accept CamelCase | PascalCase | SnakeCase
+
 ## 3.6.0 - 2019-10-24
 
 ### Added

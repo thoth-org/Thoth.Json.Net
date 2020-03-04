@@ -176,34 +176,36 @@ let needsPublishing (versionRegex: Regex) (newVersion: string) projFile =
 let pushNuget (newVersion: string) (projFile: string) =
     let versionRegex = Regex("<Version>(.*?)</Version>", RegexOptions.IgnoreCase)
 
-    let nugetKey =
-        match Environment.environVarOrNone "NUGET_KEY" with
-        | Some nugetKey -> nugetKey
-        | None -> failwith "The Nuget API key must be set in a NUGET_KEY environmental variable"
+    if needsPublishing versionRegex newVersion projFile then
 
-    let needsPublishing = needsPublishing versionRegex newVersion projFile
+        let nugetKey =
+            match Environment.environVarOrNone "NUGET_KEY" with
+            | Some nugetKey -> nugetKey
+            | None -> failwith "The Nuget API key must be set in a NUGET_KEY environmental variable"
 
-    (versionRegex, projFile) ||> Util.replaceLines (fun line _ ->
-        versionRegex.Replace(line, "<Version>" + newVersion + "</Version>") |> Some)
+        (versionRegex, projFile) ||> Util.replaceLines (fun line _ ->
+            versionRegex.Replace(line, "<Version>" + newVersion + "</Version>") |> Some)
 
-    DotNet.pack (fun p ->
-            DotNet.Options.lift dotnetSdk.Value p
-        )
-        projFile
+        DotNet.pack (fun p ->
+                DotNet.Options.lift dotnetSdk.Value p
+            )
+            projFile
 
-    let projDir = Path.GetDirectoryName(projFile)
+        let projDir = Path.GetDirectoryName(projFile)
 
-    let files =
         Directory.GetFiles(projDir </> "bin" </> "Release", "*.nupkg")
         |> Array.find (fun nupkg -> nupkg.Contains(newVersion))
-        |> fun x -> [x]
-
-    if needsPublishing then
-        Paket.pushFiles (fun o ->
-            { o with ApiKey = nugetKey
-                     PublishUrl = "https://www.nuget.org/api/v2/package"
-                     WorkingDir = __SOURCE_DIRECTORY__ })
-            files
+        |> (fun nupkg ->
+            DotNet.nugetPush (fun p ->
+                { p with
+                    PushParams =
+                        { p.PushParams with
+                            ApiKey = Some nugetKey
+                            Source = Some "nuget.org"
+                        }
+                 }
+            ) nupkg
+        )
 
 let versionRegex = Regex("^## ?\\[?v?([\\w\\d.-]+\\.[\\w\\d.-]+[a-zA-Z0-9])\\]?", RegexOptions.IgnoreCase)
 
