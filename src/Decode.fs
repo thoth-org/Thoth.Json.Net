@@ -67,7 +67,7 @@ module Decode =
             | BadField (msg, value) ->
                 genericMsg msg value true
             | BadPath (msg, value, fieldName) ->
-                genericMsg msg value true + ("\nNode `" + fieldName + "` is unkown.")
+                genericMsg msg value true + ("\nNode `" + fieldName + "` is unknown.")
             | TooSmallArray (msg, value) ->
                 "Expecting " + msg + ".\n" + (Helpers.anyToString value)
             | BadOneOf messages ->
@@ -928,6 +928,11 @@ module Decode =
 
     open FSharp.Reflection
 
+    type private DecodeAutoExtra =
+        { Decoders: Map<string, ref<BoxedDecoder>>
+          FieldDecoders: Map<string, Map<string, FieldDecoder>>
+          CaseStrategy: CaseStrategy }
+
     type private DecoderCrate<'T>(dec: Decoder<'T>) =
         inherit BoxedDecoder()
         override __.Decode(path, token) =
@@ -942,7 +947,7 @@ module Decode =
     let unboxDecoder<'T> (d: BoxedDecoder): Decoder<'T> =
         (d :?> DecoderCrate<'T>).UnboxedDecoder
 
-    let private autoObject (decoderInfos: (string * BoxedDecoder)[]) (path : string) (value: JsonValue) =
+    let private autoObject (decoderInfos: (string * BoxedDecoder)[]) (fieldDecoders: Map<string, FieldDecoder>) (path : string) (value: JsonValue) =
         if not (Helpers.isObject value) then
             (path, BadPrimitive ("an object", value)) |> Error
         else
@@ -950,8 +955,15 @@ module Decode =
                 match acc with
                 | Error _ -> acc
                 | Ok result ->
-                    Helpers.getField name value
-                    |> decoder.BoxedDecoder (path + "." + name)
+                    let path = path + "." + name
+                    let value = Helpers.getField name value
+                    match Map.tryFind name fieldDecoders with
+                    | None -> decoder.BoxedDecoder path value
+                    | Some fieldDecoder ->
+                        match fieldDecoder (Option.ofObj value) with
+                        | UseOk v -> Ok v
+                        | UseError e -> Error(path, FailMessage e)
+                        | UseAutoDecoder -> decoder.BoxedDecoder path value
                     |> Result.map (fun v -> v::result))
 
     let private mixedArray msg (decoders: BoxedDecoder[]) (path: string) (values: JsonValue[]): Result<obj list, DecoderError> =
@@ -1031,16 +1043,33 @@ module Decode =
                         System.Enum.Parse(t, toString enumValue)
                         |> Ok
                     | false ->
-                        (path, BadPrimitiveExtra(t.FullName, value, "Unkown value provided for the enum"))
+                        (path, BadPrimitiveExtra(t.FullName, value, "Unknown value provided for the enum"))
                         |> Error
                 | Error msg ->
                     Error msg
 
-    let rec private genericMap extra isCamelCase (t: System.Type) =
+    let private genericDict (t: System.Type) (keyType: System.Type) (valueType: System.Type) (kvs: obj) =
+        let dic = System.Activator.CreateInstance(t)
+        let addMethod = t.GetMethod("Add")
+        let kvProps = typedefof<obj * obj>.MakeGenericType(keyType, valueType).GetProperties()
+        for kv in kvs :?> System.Collections.IEnumerable do
+            let k = kvProps.[0].GetValue(kv)
+            let v = kvProps.[1].GetValue(kv)
+            addMethod.Invoke(dic, [|k; v|]) |> ignore
+        dic
+
+    let private genericHashSet (t: System.Type) (keyType: System.Type) (xs: obj) =
+        let hashSet = System.Activator.CreateInstance(t)
+        let addMethod = t.GetMethod("Add")
+        for x in xs :?> System.Collections.IEnumerable do
+            addMethod.Invoke(hashSet, [|x|]) |> ignore
+        hashSet
+
+    let rec private autoDecodeMapOrDict (constructor: System.Type -> System.Type -> System.Type -> obj -> obj) extra (t: System.Type) =
         let keyType   = t.GenericTypeArguments.[0]
         let valueType = t.GenericTypeArguments.[1]
-        let valueDecoder = autoDecoder extra isCamelCase false valueType
-        let keyDecoder = autoDecoder extra isCamelCase false keyType
+        let valueDecoder = autoDecoder extra false valueType
+        let keyDecoder = autoDecoder extra false keyType
         let tupleType = typedefof<obj * obj>.MakeGenericType([|keyType; valueType|])
         let listType = typedefof< ResizeArray<obj> >.MakeGenericType([|tupleType|])
         let addMethod = listType.GetMethod("Add")
@@ -1077,10 +1106,21 @@ module Decode =
                                     Ok acc)
                     | _ ->
                         (path, BadPrimitive ("an array or an object", value)) |> Error
-            kvs |> Result.map (fun kvs -> System.Activator.CreateInstance(t, kvs))
+            kvs |> Result.map (constructor t keyType valueType)
 
+    and private autoDecodeSetOrHashSet (constructor: System.Type -> System.Type -> obj -> obj) extra (t: System.Type) =
+        let keyType = t.GenericTypeArguments.[0]
+        let decoder = autoDecoder extra false keyType
+        fun path value ->
+            match array decoder.BoxedDecoder path value with
+            | Ok items ->
+                let ar = System.Array.CreateInstance(keyType, items.Length)
+                for i = 0 to ar.Length - 1 do
+                    ar.SetValue(items.[i], i)
+                constructor t keyType ar |> Ok
+            | Error er -> Error er
 
-    and private makeUnion extra caseStrategy t name (path : string) (values: JsonValue[]) =
+    and private makeUnion extra t name (path : string) (values: JsonValue[]) =
         let uci =
             FSharpType.GetUnionCases(t, allowAccessToPrivateRepresentation=true)
             |> Array.tryFind (fun x -> x.Name = name)
@@ -1090,34 +1130,37 @@ module Decode =
             if values.Length = 0 then
                 FSharpValue.MakeUnion(uci, [||], allowAccessToPrivateRepresentation=true) |> Ok
             else
-                let decoders = uci.GetFields() |> Array.map (fun fi -> autoDecoder extra caseStrategy false fi.PropertyType)
+                let decoders = uci.GetFields() |> Array.map (fun fi -> autoDecoder extra false fi.PropertyType)
                 mixedArray "union fields" decoders path values
                 |> Result.map (fun values -> FSharpValue.MakeUnion(uci, List.toArray values, allowAccessToPrivateRepresentation=true))
 
-    and private autoDecodeRecordsAndUnions extra (caseStrategy : CaseStrategy) (isOptional : bool) (t: System.Type): BoxedDecoder =
+    and private autoDecodeRecordsAndUnions extra (isOptional : bool) (t: System.Type): BoxedDecoder =
         // Add the decoder to extra in case one of the fields is recursive
         let decoderRef = ref Unchecked.defaultof<_>
-        let extra = extra |> Map.add t.FullName decoderRef
+        let extra = { extra with Decoders = extra.Decoders |> Map.add t.FullName decoderRef }
         let decoder =
             if FSharpType.IsRecord(t, allowAccessToPrivateRepresentation=true) then
+                let fieldDecoders =
+                    Map.tryFind t.FullName extra.FieldDecoders
+                    |> Option.defaultValue Map.empty
                 let decoders =
                     FSharpType.GetRecordFields(t, allowAccessToPrivateRepresentation=true)
                     |> Array.map (fun fi ->
-                        let name = Util.Casing.convert caseStrategy fi.Name
-                        name, autoDecoder extra caseStrategy false fi.PropertyType)
+                        let name = Util.Casing.convert extra.CaseStrategy fi.Name
+                        name, autoDecoder extra false fi.PropertyType)
                 boxDecoder(fun path value ->
-                    autoObject decoders path value
+                    autoObject decoders fieldDecoders path value
                     |> Result.map (fun xs -> FSharpValue.MakeRecord(t, List.toArray xs, allowAccessToPrivateRepresentation=true)))
 
             elif FSharpType.IsUnion(t, allowAccessToPrivateRepresentation=true) then
                 boxDecoder(fun path (value: JsonValue) ->
                     if Helpers.isString(value) then
                         let name = Helpers.asString value
-                        makeUnion extra caseStrategy t name path [||]
+                        makeUnion extra t name path [||]
                     elif Helpers.isArray(value) then
                         let values = Helpers.asArray value
                         let name = Helpers.asString values.[0]
-                        makeUnion extra caseStrategy t name path values.[1..]
+                        makeUnion extra t name path values.[1..]
                     else (path, BadPrimitive("a string or array", value)) |> Error)
             else
                 if isOptional then
@@ -1129,15 +1172,14 @@ module Decode =
         decoderRef := decoder
         decoder
 
-
-    and private autoDecoder (extra: Map<string, ref<BoxedDecoder>>) caseStrategy (isOptional : bool) (t: System.Type) : BoxedDecoder =
+    and private autoDecoder (extra: DecodeAutoExtra) (isOptional : bool) (t: System.Type) : BoxedDecoder =
       let fullname = t.FullName
-      match Map.tryFind fullname extra with
+      match Map.tryFind fullname extra.Decoders with
       | Some decoderRef -> boxDecoder(fun path value -> decoderRef.contents.BoxedDecoder path value)
       | None ->
         if t.IsArray then
             let elemType = t.GetElementType()
-            let decoder = autoDecoder extra caseStrategy false elemType
+            let decoder = autoDecoder extra false elemType
             boxDecoder(fun path value ->
                 match array decoder.BoxedDecoder path value with
                 | Ok items ->
@@ -1148,7 +1190,7 @@ module Decode =
                 | Error er -> Error er)
         elif t.IsGenericType then
             if FSharpType.IsTuple(t) then
-                let decoders = FSharpType.GetTupleElements(t) |> Array.map (autoDecoder extra caseStrategy false)
+                let decoders = FSharpType.GetTupleElements(t) |> Array.map (autoDecoder extra false)
                 boxDecoder(fun path value ->
                     if Helpers.isArray value then
                         mixedArray "tuple elements" decoders path (Helpers.asArray value)
@@ -1157,28 +1199,22 @@ module Decode =
             else
                 let fullname = t.GetGenericTypeDefinition().FullName
                 if fullname = typedefof<obj option>.FullName then
-                    autoDecoder extra caseStrategy true t.GenericTypeArguments.[0] |> genericOption t |> boxDecoder
+                    autoDecoder extra true t.GenericTypeArguments.[0] |> genericOption t |> boxDecoder
                 elif fullname = typedefof<obj list>.FullName then
-                    autoDecoder extra caseStrategy false t.GenericTypeArguments.[0] |> genericList t |> boxDecoder
+                    autoDecoder extra false t.GenericTypeArguments.[0] |> genericList t |> boxDecoder
                 // I don't know for now how to support seq
                 // elif fullname = typedefof<obj seq>.FullName then
-                //     autoDecoder extra caseStrategy false t.GenericTypeArguments.[0] |> genericSeq t |> boxDecoder
+                //     autoDecoder extra false t.GenericTypeArguments.[0] |> genericSeq t |> boxDecoder
                 elif fullname = typedefof< Map<string, obj> >.FullName then
-                    genericMap extra caseStrategy t |> boxDecoder
+                    autoDecodeMapOrDict (fun t _ _ kvs -> System.Activator.CreateInstance(t, kvs)) extra t |> boxDecoder
+                elif fullname = typedefof< System.Collections.Generic.Dictionary<string, obj> >.FullName then
+                    autoDecodeMapOrDict genericDict extra t |> boxDecoder
                 elif fullname = typedefof< Set<string> >.FullName then
-                    let t = t.GenericTypeArguments.[0]
-                    let decoder = autoDecoder extra caseStrategy false t
-                    boxDecoder(fun path value ->
-                        match array decoder.BoxedDecoder path value with
-                        | Ok items ->
-                            let ar = System.Array.CreateInstance(t, items.Length)
-                            for i = 0 to ar.Length - 1 do
-                                ar.SetValue(items.[i], i)
-                            let setType = typedefof< Set<string> >.MakeGenericType([|t|])
-                            System.Activator.CreateInstance(setType, ar) |> Ok
-                        | Error er -> Error er)
+                    autoDecodeSetOrHashSet (fun t _ kvs -> System.Activator.CreateInstance(t, kvs)) extra t |> boxDecoder
+                elif fullname = typedefof< System.Collections.Generic.HashSet<string> >.FullName then
+                    autoDecodeSetOrHashSet genericHashSet extra t |> boxDecoder
                 else
-                    autoDecodeRecordsAndUnions extra caseStrategy isOptional t
+                    autoDecodeRecordsAndUnions extra isOptional t
         elif t.IsEnum then
             let enumType = System.Enum.GetUnderlyingType(t).FullName
             if enumType = typeof<sbyte>.FullName then
@@ -1251,13 +1287,20 @@ If you can't use one of these types, please pass an extra decoder.
                 boxDecoder (fun _ v ->
                     if Helpers.isNullValue v then Ok(null: obj)
                     else v.Value<obj>() |> Ok)
-            else autoDecodeRecordsAndUnions extra caseStrategy isOptional t
+            else autoDecodeRecordsAndUnions extra isOptional t
 
-    let private makeExtra (extra: ExtraCoders option) =
-        match extra with
-        | None -> Map.empty
-        | Some e -> Map.map (fun _ (_,dec) -> ref dec) e.Coders
-
+    let private makeExtra (extra: ExtraCoders option) caseStrategy =
+        let decoders =
+            extra |> Option.map (fun e -> e.Coders |> Map.map (fun _ (_,dec) -> ref dec))
+        let fieldDecoders =
+            extra |> Option.map (fun e ->
+                e.FieldDecoders |> Map.map (fun _ kvs ->
+                    kvs |> Seq.map (fun kv -> Util.Casing.convert caseStrategy kv.Key, kv.Value) |> Map))
+        {
+            CaseStrategy = caseStrategy
+            Decoders = defaultArg decoders Map.empty
+            FieldDecoders = defaultArg fieldDecoders Map.empty
+        }
     module Auto =
 
         /// This API  is only implemented inside Thoth.Json.Net for now
@@ -1274,7 +1317,7 @@ If you can't use one of these types, please pass an extra decoder.
 
                 let decoderCrate =
                     Cache.Decoders.Value.GetOrAdd(key, fun _ ->
-                        autoDecoder (makeExtra extra) caseStrategy false t)
+                        autoDecoder (makeExtra extra caseStrategy) false t)
 
                 fun path token ->
                     match decoderCrate.Decode(path, token) with
@@ -1283,7 +1326,7 @@ If you can't use one of these types, please pass an extra decoder.
 
             static member generateDecoder<'T> (t: System.Type, ?caseStrategy : CaseStrategy, ?extra: ExtraCoders): Decoder<'T> =
                 let caseStrategy = defaultArg caseStrategy PascalCase
-                let decoderCrate = autoDecoder (makeExtra extra) caseStrategy false t
+                let decoderCrate = autoDecoder (makeExtra extra caseStrategy) false t
                 fun path token ->
                     match decoderCrate.Decode(path, token) with
                     | Ok x -> Ok(x :?> 'T)

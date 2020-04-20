@@ -347,6 +347,11 @@ module Encode =
 
     open FSharp.Reflection
 
+    type private EncodeAutoExtra =
+        { Encoders: Map<string, ref<BoxedEncoder>>
+          FieldEncoders: Map<string, Map<string, BoxedFieldEncoder>>
+          CaseStrategy: CaseStrategy }
+
     type private EncoderCrate<'T>(enc: Encoder<'T>) =
         inherit BoxedEncoder()
         override __.Encode(value: obj): JsonValue =
@@ -402,21 +407,30 @@ module Encode =
             LowerFirst
     #endif
 
-    let rec private autoEncodeRecordsAndUnions extra (caseStrategy : CaseStrategy) (skipNullField : bool) (t: System.Type) : BoxedEncoder =
+    let rec private autoEncodeRecordsAndUnions extra (skipNullField : bool) (t: System.Type) : BoxedEncoder =
         // Add the encoder to extra in case one of the fields is recursive
         let encoderRef = ref Unchecked.defaultof<_>
-        let extra = extra |> Map.add t.FullName encoderRef
+        let extra = { extra with Encoders = extra.Encoders |> Map.add t.FullName encoderRef }
         let encoder =
             if FSharpType.IsRecord(t, allowAccessToPrivateRepresentation=true) then
+                let fieldEncoders =
+                    Map.tryFind t.FullName extra.FieldEncoders
+                    |> Option.defaultValue Map.empty
                 let setters =
                     FSharpType.GetRecordFields(t, allowAccessToPrivateRepresentation=true)
                     |> Array.map (fun fi ->
-                        let targetKey = Util.Casing.convert caseStrategy fi.Name
-                        let encoder = autoEncoder extra caseStrategy skipNullField fi.PropertyType
+                        let targetKey = Util.Casing.convert extra.CaseStrategy fi.Name
+                        let encoder = autoEncoder extra skipNullField fi.PropertyType
                         fun (source: obj) (target: JObject) ->
                             let value = FSharpValue.GetRecordField(source, fi)
                             if not skipNullField || (skipNullField && not (isNull value)) then // Discard null fields
-                                target.[targetKey] <- encoder.Encode value
+                                match Map.tryFind fi.Name fieldEncoders with
+                                | None -> target.[targetKey] <- encoder.Encode value
+                                | Some fieldEncoder ->
+                                    match fieldEncoder value with
+                                    | UseAutoEncoder -> target.[targetKey] <- encoder.Encode value
+                                    | UseJsonValue v -> target.[targetKey] <- v
+                                    | IgnoreField -> ()
                             target)
                 boxEncoder(fun (source: obj) ->
                     (JObject(), setters) ||> Seq.fold (fun target set -> set source target) :> JsonValue)
@@ -448,7 +462,7 @@ module Encode =
                         let target = Array.zeroCreate<JsonValue> (len + 1)
                         target.[0] <- string info.Name
                         for i = 1 to len do
-                            let encoder = autoEncoder extra caseStrategy skipNullField fieldTypes.[i-1].PropertyType
+                            let encoder = autoEncoder extra skipNullField fieldTypes.[i-1].PropertyType
                             target.[i] <- encoder.Encode(fields.[i-1])
                         array target)
             else
@@ -463,18 +477,42 @@ module Encode =
                 ar.Add(encoder.Encode(x))
             ar :> JsonValue)
 
-    and private autoEncoder (extra: Map<string, ref<BoxedEncoder>>) caseStrategy (skipNullField : bool) (t: System.Type) : BoxedEncoder =
+    and private autoEncodeMapOrDict (extra: EncodeAutoExtra) (skipNullField : bool) (t: System.Type) : BoxedEncoder =
+        let keyType = t.GenericTypeArguments.[0]
+        let valueType = t.GenericTypeArguments.[1]
+        let valueEncoder = valueType |> autoEncoder extra skipNullField
+        let kvProps = typedefof<KeyValuePair<obj,obj>>.MakeGenericType(keyType, valueType).GetProperties()
+        match keyType with
+        | StringifiableType toString ->
+            boxEncoder(fun (value: obj) ->
+                let target = JObject()
+                for kv in value :?> System.Collections.IEnumerable do
+                    let k = kvProps.[0].GetValue(kv)
+                    let v = kvProps.[1].GetValue(kv)
+                    target.[toString k] <- valueEncoder.Encode v
+                target :> JsonValue)
+        | _ ->
+            let keyEncoder = keyType |> autoEncoder extra skipNullField
+            boxEncoder(fun (value: obj) ->
+                let target = JArray()
+                for kv in value :?> System.Collections.IEnumerable do
+                    let k = kvProps.[0].GetValue(kv)
+                    let v = kvProps.[1].GetValue(kv)
+                    target.Add(JArray [|keyEncoder.Encode k; valueEncoder.Encode v|])
+                target :> JsonValue)
+
+    and private autoEncoder (extra: EncodeAutoExtra) (skipNullField : bool) (t: System.Type) : BoxedEncoder =
       let fullname = t.FullName
-      match Map.tryFind fullname extra with
+      match Map.tryFind fullname extra.Encoders with
       | Some encoderRef -> boxEncoder(fun v -> encoderRef.contents.BoxedEncoder v)
       | None ->
         if t.IsArray then
-            t.GetElementType() |> autoEncoder extra caseStrategy skipNullField |> genericSeq
+            t.GetElementType() |> autoEncoder extra skipNullField |> genericSeq
         elif t.IsGenericType then
             if FSharpType.IsTuple(t) then
                 let encoders =
                     FSharpType.GetTupleElements(t)
-                    |> Array.map (autoEncoder extra caseStrategy skipNullField)
+                    |> Array.map (autoEncoder extra skipNullField)
                 boxEncoder(fun (value: obj) ->
                     FSharpValue.GetTupleFields(value)
                     |> Seq.mapi (fun i x -> encoders.[i].Encode x) |> seq)
@@ -482,42 +520,23 @@ module Encode =
                 let fullname = t.GetGenericTypeDefinition().FullName
                 if fullname = typedefof<obj option>.FullName then
                     // Evaluate lazily so we don't need to generate the encoder for null values
-                    let encoder = lazy autoEncoder extra caseStrategy skipNullField t.GenericTypeArguments.[0]
+                    let encoder = lazy autoEncoder extra skipNullField t.GenericTypeArguments.[0]
                     boxEncoder(fun (value: obj) ->
                         if isNull value then nil
                         else
                             let _, fields = FSharpValue.GetUnionFields(value, t, allowAccessToPrivateRepresentation=true)
                             encoder.Value.Encode fields.[0])
                 elif fullname = typedefof<obj list>.FullName
-                    || fullname = typedefof<Set<string>>.FullName then
+                    || fullname = typedefof<Set<string>>.FullName
+                    || fullname = typedefof<HashSet<string>>.FullName then
                     // I don't know how to support seq for now.
                     // || fullname = typedefof<obj seq>.FullName
-                    t.GenericTypeArguments.[0] |> autoEncoder extra caseStrategy skipNullField |> genericSeq
-                elif fullname = typedefof< Map<string, obj> >.FullName then
-                    let keyType = t.GenericTypeArguments.[0]
-                    let valueType = t.GenericTypeArguments.[1]
-                    let valueEncoder = valueType |> autoEncoder extra caseStrategy skipNullField
-                    let kvProps = typedefof<KeyValuePair<obj,obj>>.MakeGenericType(keyType, valueType).GetProperties()
-                    match keyType with
-                    | StringifiableType toString ->
-                        boxEncoder(fun (value: obj) ->
-                            let target = JObject()
-                            for kv in value :?> System.Collections.IEnumerable do
-                                let k = kvProps.[0].GetValue(kv)
-                                let v = kvProps.[1].GetValue(kv)
-                                target.[toString k] <- valueEncoder.Encode v
-                            target :> JsonValue)
-                    | _ ->
-                        let keyEncoder = keyType |> autoEncoder extra caseStrategy skipNullField
-                        boxEncoder(fun (value: obj) ->
-                            let target = JArray()
-                            for kv in value :?> System.Collections.IEnumerable do
-                                let k = kvProps.[0].GetValue(kv)
-                                let v = kvProps.[1].GetValue(kv)
-                                target.Add(JArray [|keyEncoder.Encode k; valueEncoder.Encode v|])
-                            target :> JsonValue)
+                    t.GenericTypeArguments.[0] |> autoEncoder extra skipNullField |> genericSeq
+                elif fullname = typedefof< Map<string, obj> >.FullName
+                    || fullname = typedefof< Dictionary<string, obj> >.FullName then
+                    autoEncodeMapOrDict extra skipNullField t
                 else
-                    autoEncodeRecordsAndUnions extra caseStrategy skipNullField t
+                    autoEncodeRecordsAndUnions extra skipNullField t
         elif t.IsEnum then
             let enumType = System.Enum.GetUnderlyingType(t).FullName
             if enumType = typeof<sbyte>.FullName then
@@ -589,12 +608,18 @@ If you can't use one of these types, please pass an extra encoder.
             elif fullname = typeof<obj>.FullName then
                 boxEncoder(fun (v: obj) -> JValue(v) :> JsonValue)
             else
-                autoEncodeRecordsAndUnions extra caseStrategy skipNullField t
+                autoEncodeRecordsAndUnions extra skipNullField t
 
-    let private makeExtra (extra: ExtraCoders option) =
-        match extra with
-        | None -> Map.empty
-        | Some e -> Map.map (fun _ (enc,_) -> ref enc) e.Coders
+    let private makeExtra (extra: ExtraCoders option) caseStrategy =
+        let encoders =
+            extra |> Option.map (fun e -> e.Coders |> Map.map (fun _ (enc,_) -> ref enc))
+        let fieldEncoders =
+            extra |> Option.map (fun e -> e.FieldEncoders)
+        {
+            CaseStrategy = caseStrategy
+            Encoders = defaultArg encoders Map.empty
+            FieldEncoders = defaultArg fieldEncoders Map.empty
+        }
 
     module Auto =
 
@@ -613,7 +638,7 @@ If you can't use one of these types, please pass an extra encoder.
 
                 let encoderCrate =
                     Cache.Encoders.Value.GetOrAdd(key, fun _ ->
-                        autoEncoder (makeExtra extra) caseStrategy skipNullField t)
+                        autoEncoder (makeExtra extra caseStrategy) skipNullField t)
 
                 fun (value: 'T) ->
                     encoderCrate.Encode value
@@ -627,7 +652,7 @@ If you can't use one of these types, please pass an extra encoder.
         static member generateEncoder<'T>(?caseStrategy : CaseStrategy, ?extra: ExtraCoders, ?skipNullField: bool): Encoder<'T> =
             let caseStrategy = defaultArg caseStrategy PascalCase
             let skipNullField = defaultArg skipNullField true
-            let encoderCrate = autoEncoder (makeExtra extra) caseStrategy skipNullField typeof<'T>
+            let encoderCrate = autoEncoder (makeExtra extra caseStrategy) skipNullField typeof<'T>
             fun (value: 'T) ->
                 encoderCrate.Encode value
 
