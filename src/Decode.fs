@@ -960,9 +960,9 @@ module Decode =
                     match Map.tryFind name fieldDecoders with
                     | None -> decoder.BoxedDecoder path value
                     | Some fieldDecoder ->
-                        match fieldDecoder (Option.ofObj value) with
+                        match fieldDecoder path (Option.ofObj value) with
                         | UseOk v -> Ok v
-                        | UseError e -> Error(path, FailMessage e)
+                        | UseError e -> Error e
                         | UseAutoDecoder -> decoder.BoxedDecoder path value
                     |> Result.map (fun v -> v::result))
 
@@ -1058,7 +1058,7 @@ module Decode =
             addMethod.Invoke(dic, [|k; v|]) |> ignore
         dic
 
-    let private genericHashSet (t: System.Type) (keyType: System.Type) (xs: obj) =
+    let private genericHashSet (t: System.Type) (xs: obj) =
         let hashSet = System.Activator.CreateInstance(t)
         let addMethod = t.GetMethod("Add")
         for x in xs :?> System.Collections.IEnumerable do
@@ -1108,7 +1108,7 @@ module Decode =
                         (path, BadPrimitive ("an array or an object", value)) |> Error
             kvs |> Result.map (constructor t keyType valueType)
 
-    and private autoDecodeSetOrHashSet (constructor: System.Type -> System.Type -> obj -> obj) extra (t: System.Type) =
+    and private autoDecodeSetOrHashSet (constructor: System.Type -> obj -> obj) extra (t: System.Type) =
         let keyType = t.GenericTypeArguments.[0]
         let decoder = autoDecoder extra false keyType
         fun path value ->
@@ -1117,7 +1117,7 @@ module Decode =
                 let ar = System.Array.CreateInstance(keyType, items.Length)
                 for i = 0 to ar.Length - 1 do
                     ar.SetValue(items.[i], i)
-                constructor t keyType ar |> Ok
+                constructor t ar |> Ok
             | Error er -> Error er
 
     and private makeUnion extra t name (path : string) (values: JsonValue[]) =
@@ -1210,7 +1210,7 @@ module Decode =
                 elif fullname = typedefof< System.Collections.Generic.Dictionary<string, obj> >.FullName then
                     autoDecodeMapOrDict genericDict extra t |> boxDecoder
                 elif fullname = typedefof< Set<string> >.FullName then
-                    autoDecodeSetOrHashSet (fun t _ kvs -> System.Activator.CreateInstance(t, kvs)) extra t |> boxDecoder
+                    autoDecodeSetOrHashSet (fun t kvs -> System.Activator.CreateInstance(t, kvs)) extra t |> boxDecoder
                 elif fullname = typedefof< System.Collections.Generic.HashSet<string> >.FullName then
                     autoDecodeSetOrHashSet genericHashSet extra t |> boxDecoder
                 else
@@ -1232,7 +1232,7 @@ module Decode =
             else
                 failwithf
                     """Cannot generate auto decoder for %s.
-Thoth.Json.Net only support the folluwing enum types:
+Thoth.Json.Net only support the following enum types:
 - sbyte
 - byte
 - int16

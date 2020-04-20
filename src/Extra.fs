@@ -39,13 +39,13 @@ let __withCustomFieldDecoderAndKey typeFullName (fieldName: string) (fieldDecode
 let inline withCustomFieldDecoder<'T> (fieldName: string) (fieldDecoder: FieldDecoder) (extra: ExtraCoders) =
     __withCustomFieldDecoderAndKey typeof<'T>.FullName fieldName fieldDecoder extra
 
-let __withCustomFieldEncoderAndKey typeFullName (fieldName: string) (fieldEncoder: FieldEncoder<'T>) (extra: ExtraCoders) =
+let __withCustomFieldEncoderAndKey typeFullName (fieldName: string) (fieldEncoder: FieldEncoder) (extra: ExtraCoders) =
     { extra with Hash = System.Guid.NewGuid().ToString()
                  FieldEncoders =
                     Map.tryFind typeFullName extra.FieldEncoders
                     |> Option.defaultValue Map.empty
-                    |> Map.add fieldName (fun x -> x :?> 'T |> fieldEncoder)
+                    |> Map.add fieldName fieldEncoder
                     |> fun m -> Map.add typeFullName m extra.FieldEncoders }
 
-let inline withCustomFieldEncoder<'T> (fieldName: string) (fieldEncoder: FieldEncoder<'T>) (extra: ExtraCoders) =
+let inline withCustomFieldEncoder<'T> (fieldName: string) (fieldEncoder: FieldEncoder) (extra: ExtraCoders) =
     __withCustomFieldEncoderAndKey typeof<'T>.FullName fieldName fieldEncoder extra
