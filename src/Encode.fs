@@ -528,9 +528,8 @@ module Encode =
                             encoder.Value.Encode fields.[0])
                 elif fullname = typedefof<obj list>.FullName
                     || fullname = typedefof<Set<string>>.FullName
-                    || fullname = typedefof<HashSet<string>>.FullName then
-                    // I don't know how to support seq for now.
-                    // || fullname = typedefof<obj seq>.FullName
+                    || fullname = typedefof<HashSet<string>>.FullName
+                    || fullname = typedefof<obj seq>.FullName then
                     t.GenericTypeArguments.[0] |> autoEncoder extra skipNullField |> genericSeq
                 elif fullname = typedefof< Map<string, obj> >.FullName
                     || fullname = typedefof< Dictionary<string, obj> >.FullName then

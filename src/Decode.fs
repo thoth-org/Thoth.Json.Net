@@ -1002,6 +1002,19 @@ module Decode =
                         | Error er -> Error er
                         | Ok result -> FSharpValue.MakeUnion(ucis.[1], [|result; acc|], allowAccessToPrivateRepresentation=true) |> Ok)
 
+    let private genericArray elemType (decoder: BoxedDecoder) =
+        fun path value ->
+            if not (Helpers.isArray value) then
+                (path, BadPrimitive ("a list", value)) |> Error
+            else
+                match array decoder.BoxedDecoder path value with
+                | Ok items ->
+                    let ar = System.Array.CreateInstance(elemType, items.Length)
+                    for i = 0 to ar.Length - 1 do
+                        ar.SetValue(items.[i], i)
+                    Ok ar
+                | Error er -> Error er
+
     // let private genericSeq t (decoder: BoxedDecoder) =
     //     fun (path : string) (value: JsonValue) ->
     //         if not (Helpers.isArray value) then
@@ -1179,15 +1192,7 @@ module Decode =
       | None ->
         if t.IsArray then
             let elemType = t.GetElementType()
-            let decoder = autoDecoder extra false elemType
-            boxDecoder(fun path value ->
-                match array decoder.BoxedDecoder path value with
-                | Ok items ->
-                    let ar = System.Array.CreateInstance(elemType, items.Length)
-                    for i = 0 to ar.Length - 1 do
-                        ar.SetValue(items.[i], i)
-                    Ok ar
-                | Error er -> Error er)
+            autoDecoder extra false elemType |> genericArray elemType |> boxDecoder
         elif t.IsGenericType then
             if FSharpType.IsTuple(t) then
                 let decoders = FSharpType.GetTupleElements(t) |> Array.map (autoDecoder extra false)
@@ -1202,9 +1207,9 @@ module Decode =
                     autoDecoder extra true t.GenericTypeArguments.[0] |> genericOption t |> boxDecoder
                 elif fullname = typedefof<obj list>.FullName then
                     autoDecoder extra false t.GenericTypeArguments.[0] |> genericList t |> boxDecoder
-                // I don't know for now how to support seq
-                // elif fullname = typedefof<obj seq>.FullName then
-                //     autoDecoder extra false t.GenericTypeArguments.[0] |> genericSeq t |> boxDecoder
+                elif fullname = typedefof<obj seq>.FullName then
+                    let elemType = t.GenericTypeArguments.[0]
+                    autoDecoder extra false elemType |> genericArray elemType |> boxDecoder
                 elif fullname = typedefof< Map<string, obj> >.FullName then
                     autoDecodeMapOrDict (fun t _ _ kvs -> System.Activator.CreateInstance(t, kvs)) extra t |> boxDecoder
                 elif fullname = typedefof< System.Collections.Generic.Dictionary<string, obj> >.FullName then
