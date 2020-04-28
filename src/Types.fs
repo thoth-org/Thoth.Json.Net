@@ -36,9 +36,25 @@ type BoxedEncoder() =
     abstract Encode: value: obj -> JsonValue
     member this.BoxedEncoder: Encoder<obj> = this.Encode
 
+type FieldDecoderResult =
+    | UseOk of obj
+    | UseError of DecoderError
+    | UseAutoDecoder
+
+type FieldDecoder = string -> JsonValue option -> FieldDecoderResult
+
+type FieldEncoderResult =
+    | UseJsonValue of JsonValue
+    | IgnoreField
+    | UseAutoEncoder
+
+type FieldEncoder = obj -> FieldEncoderResult
+
 type ExtraCoders =
     { Hash: string
-      Coders: Map<string, BoxedEncoder * BoxedDecoder> }
+      Coders: Map<string, BoxedEncoder * BoxedDecoder>
+      FieldDecoders: Map<string, Map<string, FieldDecoder>>
+      FieldEncoders: Map<string, Map<string, FieldEncoder>> }
 
 module internal Cache =
     open System
