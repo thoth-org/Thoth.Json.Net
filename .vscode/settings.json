@@ -15,11 +15,5 @@
     },
     "files.trimTrailingWhitespace": true,
     "files.trimFinalNewlines": true,
-    "workbench.iconTheme": "material-icon-theme",
-    "workbench.colorTheme": "One Dark Pro",
-    "editor.fontSize": 12,
-    "terminal.integrated.fontSize": 12,
-    "editor.fontLigatures": true,
-    "editor.fontFamily": "Fira Code, JetBrains Mono, Consolas, 'Courier New', monospace",
     "gitlens.codeLens.enabled": false
 }
