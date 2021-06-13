@@ -21,7 +21,9 @@ module Encode =
     ///**Exceptions**
     ///
     let string (value : string) : JsonValue =
-        JValue(value) :> JsonValue
+        match value with
+        |null -> JValue(value) :> JsonValue
+        |_ -> JsonConvert.ToString(value) |> JToken.Parse
 
     ///**Description**
     /// Encode a GUID
