@@ -8,7 +8,7 @@ module Decode =
     open Newtonsoft.Json.Linq
     open System.IO
 
-    module private Helpers =
+    module Helpers =
         let anyToString (token: JsonValue) : string =
             if isNull token then "null"
             else
