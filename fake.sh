@@ -9,5 +9,5 @@ then
   export FrameworkPathOverride=$(dirname $(which mono))/../lib/mono/4.5/
 fi
 
-dotnet restore build.proj
+dotnet tool restore
 dotnet fake $@

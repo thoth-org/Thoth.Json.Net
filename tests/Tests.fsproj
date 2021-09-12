@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>netcoreapp2.0;net461</TargetFrameworks>
+    <TargetFrameworks>netcoreapp3.0;net461</TargetFrameworks>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
@@ -21,6 +21,15 @@
       <Paket>True</Paket>
       <Link>paket-files/Decoders.fs</Link>
     </Compile>
+    <Compile Include="..\paket-files\tests\thoth-org\Thoth.Json\tests\BackAndForth.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/BackAndForth.fs</Link>
+    </Compile>
+    <Compile Include="..\paket-files\tests\thoth-org\Thoth.Json\tests\ExtraCoders.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/ExtraCoders.fs</Link>
+    </Compile>
+    <Compile Include="Converter.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />

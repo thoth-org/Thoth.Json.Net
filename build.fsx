@@ -112,12 +112,14 @@ let build project framework =
         { p with Framework = Some framework } ) project
 
 let testNetFrameworkDir = root </> "tests" </> "bin" </> "Release" </> "net461"
-let testNetCoreDir = root </> "tests" </> "bin" </> "Release" </> "netcoreapp2.0"
+let testNetCoreDir = root </> "tests" </> "bin" </> "Release" </> "netcoreapp3.0"
 
 Target.create "AdaptTest" (fun _ ->
     [ "Types.fs"
       "Decoders.fs"
-      "Encoders.fs" ]
+      "Encoders.fs"
+      "BackAndForth.fs"
+      "ExtraCoders.fs" ]
     |> List.map (fun fileName ->
          root </> "paket-files" </> "tests" </> "thoth-org" </> "Thoth.Json" </> "tests" </> fileName
     )
@@ -139,7 +141,7 @@ Target.create "AdaptTest" (fun _ ->
 )
 
 Target.create "Test" (fun _ ->
-    build Tests.projectFile "netcoreapp2.0"
+    build Tests.projectFile "netcoreapp3.0"
     build Tests.projectFile "net461"
 
     if Environment.isUnix then
@@ -175,34 +177,36 @@ let needsPublishing (versionRegex: Regex) (newVersion: string) projFile =
 let pushNuget (newVersion: string) (projFile: string) =
     let versionRegex = Regex("<Version>(.*?)</Version>", RegexOptions.IgnoreCase)
 
-    let nugetKey =
-        match Environment.environVarOrNone "NUGET_KEY" with
-        | Some nugetKey -> nugetKey
-        | None -> failwith "The Nuget API key must be set in a NUGET_KEY environmental variable"
+    if needsPublishing versionRegex newVersion projFile then
 
-    let needsPublishing = needsPublishing versionRegex newVersion projFile
+        let nugetKey =
+            match Environment.environVarOrNone "NUGET_KEY" with
+            | Some nugetKey -> nugetKey
+            | None -> failwith "The Nuget API key must be set in a NUGET_KEY environmental variable"
 
-    (versionRegex, projFile) ||> Util.replaceLines (fun line _ ->
-        versionRegex.Replace(line, "<Version>" + newVersion + "</Version>") |> Some)
+        (versionRegex, projFile) ||> Util.replaceLines (fun line _ ->
+            versionRegex.Replace(line, "<Version>" + newVersion + "</Version>") |> Some)
 
-    DotNet.pack (fun p ->
-            DotNet.Options.lift dotnetSdk.Value p
-        )
-        projFile
+        DotNet.pack (fun p ->
+                DotNet.Options.lift dotnetSdk.Value p
+            )
+            projFile
 
-    let projDir = Path.GetDirectoryName(projFile)
+        let projDir = Path.GetDirectoryName(projFile)
 
-    let files =
         Directory.GetFiles(projDir </> "bin" </> "Release", "*.nupkg")
         |> Array.find (fun nupkg -> nupkg.Contains(newVersion))
-        |> fun x -> [x]
-
-    if needsPublishing then
-        Paket.pushFiles (fun o ->
-            { o with ApiKey = nugetKey
-                     PublishUrl = "https://www.nuget.org/api/v2/package"
-                     WorkingDir = __SOURCE_DIRECTORY__ })
-            files
+        |> (fun nupkg ->
+            DotNet.nugetPush (fun p ->
+                { p with
+                    PushParams =
+                        { p.PushParams with
+                            ApiKey = Some nugetKey
+                            Source = Some "nuget.org"
+                        }
+                 }
+            ) nupkg
+        )
 
 let versionRegex = Regex("^## ?\\[?v?([\\w\\d.-]+\\.[\\w\\d.-]+[a-zA-Z0-9])\\]?", RegexOptions.IgnoreCase)
 
@@ -226,7 +230,7 @@ let getNotes (version : string) =
         let m = versionRegex.Match(line)
 
         if m.Success then
-            not (m.Groups.[1].Value = version)
+            (m.Groups.[1].Value <> version)
         else
             true
     )
@@ -271,4 +275,4 @@ Target.create "Release" (fun _ ->
     ==> "Publish"
     ==> "Release"
 
-Target.runOrDefault "Test"
+Target.runOrList ()

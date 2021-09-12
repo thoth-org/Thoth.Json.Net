@@ -38,20 +38,6 @@ module Encode =
         value.ToString() |> string
 
     ///**Description**
-    /// Encode an int
-    ///
-    ///**Parameters**
-    ///  * `value` - parameter of type `int`
-    ///
-    ///**Output Type**
-    ///  * `Value`
-    ///
-    ///**Exceptions**
-    ///
-    let int (value : int) : JsonValue =
-        JValue(value) :> JsonValue
-
-    ///**Description**
     /// Encode a Float. `Infinity` and `NaN` are encoded as `null`.
     ///
     ///**Parameters**
@@ -65,8 +51,11 @@ module Encode =
     let float (value : float) : JsonValue =
         JValue(value) :> JsonValue
 
+    let float32 (value : float32) : JsonValue =
+        JValue(value) :> JsonValue
+
     ///**Description**
-    /// Encode a Decimal. (Currently decimal gets converted to float.)
+    /// Encode a Decimal.
     ///
     ///**Parameters**
     ///  * `value` - parameter of type `decimal`
@@ -171,23 +160,43 @@ module Encode =
     let bigint (value : bigint) : JsonValue =
         JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
 
-    let int64 (value : int64) : JsonValue =
-        JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
-
-    let uint32 (value : uint32) : JsonValue =
-        JValue(value) :> JsonValue
-
-    let uint64 (value : uint64) : JsonValue =
-        JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
-
     let datetime (value : System.DateTime) : JsonValue =
         JValue(value.ToString("O", CultureInfo.InvariantCulture)) :> JsonValue
 
+    /// The DateTime is always encoded using UTC representation
     let datetimeOffset (value : System.DateTimeOffset) : JsonValue =
         JValue(value.ToString("O", CultureInfo.InvariantCulture)) :> JsonValue
 
     let timespan (value : System.TimeSpan) : JsonValue =
         JValue(value.ToString()) :> JsonValue
+
+
+    let sbyte (value : sbyte) : JsonValue =
+        JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
+
+    let byte (value : byte) : JsonValue =
+        JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
+
+    let int16 (value : int16) : JsonValue =
+        JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
+
+    let uint16 (value : uint16) : JsonValue =
+        JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
+
+    let int (value : int) : JsonValue =
+        JValue(value) :> JsonValue
+
+    let uint32 (value : uint32) : JsonValue =
+        JValue(value) :> JsonValue
+
+    let int64 (value : int64) : JsonValue =
+        JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
+
+    let uint64 (value : uint64) : JsonValue =
+        JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
+
+    let unit () : JsonValue =
+        JValue.CreateNull() :> JsonValue
 
     let tuple2
             (enc1 : Encoder<'T1>)
@@ -280,6 +289,36 @@ module Encode =
            enc7 v7
            enc8 v8 |] |> array
 
+    ////////////
+    // Enum ///
+    /////////
+
+    module Enum =
+
+        let byte<'TEnum when 'TEnum : enum<byte>> (value : 'TEnum) : JsonValue =
+            LanguagePrimitives.EnumToValue value
+            |> byte
+
+        let sbyte<'TEnum when 'TEnum : enum<sbyte>> (value : 'TEnum) : JsonValue =
+            LanguagePrimitives.EnumToValue value
+            |> sbyte
+
+        let int16<'TEnum when 'TEnum : enum<int16>> (value : 'TEnum) : JsonValue =
+            LanguagePrimitives.EnumToValue value
+            |> int16
+
+        let uint16<'TEnum when 'TEnum : enum<uint16>> (value : 'TEnum) : JsonValue =
+            LanguagePrimitives.EnumToValue value
+            |> uint16
+
+        let int<'TEnum when 'TEnum : enum<int>> (value : 'TEnum) : JsonValue =
+            LanguagePrimitives.EnumToValue value
+            |> int
+
+        let uint32<'TEnum when 'TEnum : enum<uint32>> (value : 'TEnum) : JsonValue =
+            LanguagePrimitives.EnumToValue value
+            |> uint32
+
     ///**Description**
     /// Convert a `Value` into a prettified string.
     ///**Parameters**
@@ -328,42 +367,7 @@ module Encode =
             Some(fun (v: obj) -> (v :?> System.Guid).ToString())
         else None
 
-    #if !NETFRAMEWORK
-    let private (|StringEnum|_|) (typ : System.Type) =
-        typ.CustomAttributes
-        |> Seq.tryPick (function
-            | attr when attr.AttributeType.FullName = typeof<Fable.Core.StringEnumAttribute>.FullName -> Some attr
-            | _ -> None
-        )
-
-
-    let private (|CompiledName|_|) (caseInfo : UnionCaseInfo) =
-        caseInfo.GetCustomAttributes()
-        |> Seq.tryPick (function
-            | :? CompiledNameAttribute as att -> Some att.CompiledName
-            | _ -> None)
-
-    let private (|LowerFirst|Forward|) (args : IList<System.Reflection.CustomAttributeTypedArgument>) =
-        args
-        |> Seq.tryPick (function
-            | rule when rule.ArgumentType.FullName = typeof<Fable.Core.CaseRules>.FullName -> Some rule
-            | _ -> None
-        )
-        |> function
-        | Some rule ->
-            match rule.Value with
-            | :? int as value ->
-                printfn "%A" value
-                match value with
-                | 0 -> Forward
-                | 1 -> LowerFirst
-                | _ -> LowerFirst // should not happen
-            | _ -> LowerFirst // should not happen
-        | None ->
-            LowerFirst
-    #endif
-
-    let rec private autoEncodeRecordsAndUnions extra (isCamelCase : bool) (t: System.Type) : BoxedEncoder =
+    let rec private autoEncodeRecordsAndUnions extra (caseStrategy : CaseStrategy) (skipNullField : bool) (t: System.Type) : BoxedEncoder =
         // Add the encoder to extra in case one of the fields is recursive
         let encoderRef = ref Unchecked.defaultof<_>
         let extra = extra |> Map.add t.FullName encoderRef
@@ -372,13 +376,11 @@ module Encode =
                 let setters =
                     FSharpType.GetRecordFields(t, allowAccessToPrivateRepresentation=true)
                     |> Array.map (fun fi ->
-                        let targetKey =
-                            if isCamelCase then fi.Name.[..0].ToLowerInvariant() + fi.Name.[1..]
-                            else fi.Name
-                        let encoder = autoEncoder extra isCamelCase fi.PropertyType
+                        let targetKey = Util.Casing.convert caseStrategy fi.Name
+                        let encoder = autoEncoder extra caseStrategy skipNullField fi.PropertyType
                         fun (source: obj) (target: JObject) ->
                             let value = FSharpValue.GetRecordField(source, fi)
-                            if not(isNull value) then // Discard null fields
+                            if not skipNullField || (skipNullField && not (isNull value)) then // Discard null fields
                                 target.[targetKey] <- encoder.Encode value
                             target)
                 boxEncoder(fun (source: obj) ->
@@ -390,16 +392,16 @@ module Encode =
                     | 0 ->
                         #if !NETFRAMEWORK
                         match t with
-                        // Replicate Fable behaviour when using StringEnum
-                        | StringEnum t ->
+                        // Replicate Fable behavior when using StringEnum
+                        | Util.Reflection.StringEnum t ->
                             match info with
-                            | CompiledName name -> string name
+                            | Util.Reflection.CompiledName name -> string name
                             | _ ->
                                 match t.ConstructorArguments with
-                                | LowerFirst ->
+                                | Util.Reflection.LowerFirst ->
                                     let name = info.Name.[..0].ToLowerInvariant() + info.Name.[1..]
                                     string name
-                                | Forward -> string info.Name
+                                | Util.Reflection.Forward -> string info.Name
 
                         | _ -> string info.Name
                         #else
@@ -411,7 +413,7 @@ module Encode =
                         let target = Array.zeroCreate<JsonValue> (len + 1)
                         target.[0] <- string info.Name
                         for i = 1 to len do
-                            let encoder = autoEncoder extra isCamelCase fieldTypes.[i-1].PropertyType
+                            let encoder = autoEncoder extra caseStrategy skipNullField fieldTypes.[i-1].PropertyType
                             target.[i] <- encoder.Encode(fields.[i-1])
                         array target)
             else
@@ -426,18 +428,18 @@ module Encode =
                 ar.Add(encoder.Encode(x))
             ar :> JsonValue)
 
-    and private autoEncoder (extra: Map<string, ref<BoxedEncoder>>) isCamelCase (t: System.Type) : BoxedEncoder =
+    and private autoEncoder (extra: Map<string, ref<BoxedEncoder>>) caseStrategy (skipNullField : bool) (t: System.Type) : BoxedEncoder =
       let fullname = t.FullName
       match Map.tryFind fullname extra with
       | Some encoderRef -> boxEncoder(fun v -> encoderRef.contents.BoxedEncoder v)
       | None ->
         if t.IsArray then
-            t.GetElementType() |> autoEncoder extra isCamelCase |> genericSeq
+            t.GetElementType() |> autoEncoder extra caseStrategy skipNullField |> genericSeq
         elif t.IsGenericType then
             if FSharpType.IsTuple(t) then
                 let encoders =
                     FSharpType.GetTupleElements(t)
-                    |> Array.map (autoEncoder extra isCamelCase)
+                    |> Array.map (autoEncoder extra caseStrategy skipNullField)
                 boxEncoder(fun (value: obj) ->
                     FSharpValue.GetTupleFields(value)
                     |> Seq.mapi (fun i x -> encoders.[i].Encode x) |> seq)
@@ -445,7 +447,7 @@ module Encode =
                 let fullname = t.GetGenericTypeDefinition().FullName
                 if fullname = typedefof<obj option>.FullName then
                     // Evaluate lazily so we don't need to generate the encoder for null values
-                    let encoder = lazy autoEncoder extra isCamelCase t.GenericTypeArguments.[0]
+                    let encoder = lazy autoEncoder extra caseStrategy skipNullField t.GenericTypeArguments.[0]
                     boxEncoder(fun (value: obj) ->
                         if isNull value then nil
                         else
@@ -453,11 +455,13 @@ module Encode =
                             encoder.Value.Encode fields.[0])
                 elif fullname = typedefof<obj list>.FullName
                     || fullname = typedefof<Set<string>>.FullName then
-                    t.GenericTypeArguments.[0] |> autoEncoder extra isCamelCase |> genericSeq
+                    // I don't know how to support seq for now.
+                    // || fullname = typedefof<obj seq>.FullName
+                    t.GenericTypeArguments.[0] |> autoEncoder extra caseStrategy skipNullField |> genericSeq
                 elif fullname = typedefof< Map<string, obj> >.FullName then
                     let keyType = t.GenericTypeArguments.[0]
                     let valueType = t.GenericTypeArguments.[1]
-                    let valueEncoder = valueType |> autoEncoder extra isCamelCase
+                    let valueEncoder = valueType |> autoEncoder extra caseStrategy skipNullField
                     let kvProps = typedefof<KeyValuePair<obj,obj>>.MakeGenericType(keyType, valueType).GetProperties()
                     match keyType with
                     | StringifiableType toString ->
@@ -469,7 +473,7 @@ module Encode =
                                 target.[toString k] <- valueEncoder.Encode v
                             target :> JsonValue)
                     | _ ->
-                        let keyEncoder = keyType |> autoEncoder extra isCamelCase
+                        let keyEncoder = keyType |> autoEncoder extra caseStrategy skipNullField
                         boxEncoder(fun (value: obj) ->
                             let target = JArray()
                             for kv in value :?> System.Collections.IEnumerable do
@@ -478,18 +482,56 @@ module Encode =
                                 target.Add(JArray [|keyEncoder.Encode k; valueEncoder.Encode v|])
                             target :> JsonValue)
                 else
-                    autoEncodeRecordsAndUnions extra isCamelCase t
+                    autoEncodeRecordsAndUnions extra caseStrategy skipNullField t
+        elif t.IsEnum then
+            let enumType = System.Enum.GetUnderlyingType(t).FullName
+            if enumType = typeof<sbyte>.FullName then
+                boxEncoder sbyte
+            elif enumType = typeof<byte>.FullName then
+                boxEncoder byte
+            elif enumType = typeof<int16>.FullName then
+                boxEncoder int16
+            elif enumType = typeof<uint16>.FullName then
+                boxEncoder uint16
+            elif enumType = typeof<int>.FullName then
+                boxEncoder int
+            elif enumType = typeof<uint32>.FullName then
+                boxEncoder uint32
+            else
+                failwithf
+                    """Cannot generate auto encoder for %s.
+Thoth.Json.Net only support the folluwing enum types:
+- sbyte
+- byte
+- int16
+- uint16
+- int
+- uint32
+If you can't use one of these types, please pass an extra encoder.
+                    """ t.FullName
         else
             if fullname = typeof<bool>.FullName then
                 boxEncoder bool
+            elif fullname = typeof<unit>.FullName then
+                boxEncoder unit
             elif fullname = typeof<string>.FullName then
                 boxEncoder string
+            elif fullname = typeof<sbyte>.FullName then
+                boxEncoder sbyte
+            elif fullname = typeof<byte>.FullName then
+                boxEncoder byte
+            elif fullname = typeof<int16>.FullName then
+                boxEncoder int16
+            elif fullname = typeof<uint16>.FullName then
+                boxEncoder uint16
             elif fullname = typeof<int>.FullName then
                 boxEncoder int
             elif fullname = typeof<uint32>.FullName then
                 boxEncoder uint32
             elif fullname = typeof<float>.FullName then
                 boxEncoder float
+            elif fullname = typeof<float32>.FullName then
+                boxEncoder float32
             // These number types require extra libraries in Fable. To prevent penalizing
             // all users, extra encoders (withInt64, etc) must be passed when they're needed.
 
@@ -512,12 +554,12 @@ module Encode =
             elif fullname = typeof<obj>.FullName then
                 boxEncoder(fun (v: obj) -> JValue(v) :> JsonValue)
             else
-                autoEncodeRecordsAndUnions extra isCamelCase t
+                autoEncodeRecordsAndUnions extra caseStrategy skipNullField t
 
     let private makeExtra (extra: ExtraCoders option) =
         match extra with
         | None -> Map.empty
-        | Some e -> Map.map (fun _ (enc,_) -> ref enc) e
+        | Some e -> Map.map (fun _ (enc,_) -> ref enc) e.Coders
 
     module Auto =
 
@@ -525,29 +567,37 @@ module Encode =
         /// The goal of this API is to provide better interop when consuming Thoth.Json.Net from a C# project
         type LowLevel =
             /// ATTENTION: Use this only when other arguments (isCamelCase, extra) don't change
-            static member generateEncoderCached<'T> (t: System.Type, ?isCamelCase : bool, ?extra: ExtraCoders): Encoder<'T> =
+            static member generateEncoderCached<'T> (t: System.Type, ?caseStrategy : CaseStrategy, ?extra: ExtraCoders, ?skipNullField: bool): Encoder<'T> =
+                let caseStrategy = defaultArg caseStrategy PascalCase
+                let skipNullField = defaultArg skipNullField true
+
+                let key =
+                    t.FullName
+                    |> (+) (Operators.string caseStrategy)
+                    |> (+) (extra |> Option.map (fun e -> e.Hash) |> Option.defaultValue "")
+
                 let encoderCrate =
-                    Cache.Encoders.Value.GetOrAdd(t, fun t ->
-                        let isCamelCase = defaultArg isCamelCase false
-                        autoEncoder (makeExtra extra) isCamelCase t)
+                    Cache.Encoders.Value.GetOrAdd(key, fun _ ->
+                        autoEncoder (makeExtra extra) caseStrategy skipNullField t)
 
                 fun (value: 'T) ->
-                    encoderCrate .Encode value
+                    encoderCrate.Encode value
 
     type Auto =
-        /// ATTENTION: Use this only when other arguments (isCamelCase, extra) don't change
-        static member generateEncoderCached<'T>(?isCamelCase : bool, ?extra: ExtraCoders): Encoder<'T> =
+        /// ATTENTION: Use this only when other arguments (caseStrategy, extra) don't change
+        static member generateEncoderCached<'T>(?caseStrategy : CaseStrategy, ?extra: ExtraCoders, ?skipNullField: bool): Encoder<'T> =
             let t = typeof<'T>
-            Auto.LowLevel.generateEncoderCached(t, ?isCamelCase = isCamelCase, ?extra = extra)
+            Auto.LowLevel.generateEncoderCached(t, ?caseStrategy = caseStrategy, ?extra = extra, ?skipNullField=skipNullField)
 
-        static member generateEncoder<'T>(?isCamelCase : bool, ?extra: ExtraCoders): Encoder<'T> =
-            let isCamelCase = defaultArg isCamelCase false
-            let encoderCrate = autoEncoder (makeExtra extra) isCamelCase typeof<'T>
+        static member generateEncoder<'T>(?caseStrategy : CaseStrategy, ?extra: ExtraCoders, ?skipNullField: bool): Encoder<'T> =
+            let caseStrategy = defaultArg caseStrategy PascalCase
+            let skipNullField = defaultArg skipNullField true
+            let encoderCrate = autoEncoder (makeExtra extra) caseStrategy skipNullField typeof<'T>
             fun (value: 'T) ->
                 encoderCrate.Encode value
 
-        static member toString(space : int, value : 'T, ?isCamelCase : bool, ?extra: ExtraCoders) : string =
-            let encoder = Auto.generateEncoder(?isCamelCase=isCamelCase, ?extra=extra)
+        static member toString(space : int, value : 'T, ?caseStrategy : CaseStrategy, ?extra: ExtraCoders, ?skipNullField: bool) : string =
+            let encoder = Auto.generateEncoder(?caseStrategy=caseStrategy, ?extra=extra, ?skipNullField=skipNullField)
             encoder value |> toString space
 
     ///**Description**

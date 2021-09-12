@@ -4,6 +4,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+## 6.0.0 - 2020-10-15
+
+* PR #44: Port API change from Thoth.Json [v6.0.0] Expose the helpers module so it can be used for custom decoders (by @weslenng)
+* PR #43: Port API change from Thoth.Json [v5.1.0] Improve tree shaking for longs (by @weslenng)
+* Fix #30: Fix Decode.Auto support for StringEnum
+
+## 5.0.0 - 2020-10-15
+
+### Fixed
+
+* PR #39: optionalAt now returns `Ok None` even when the path does not exist (by @rommsen)
+
+## 4.0.0 - 2020-03-04
+
+### Changed
+
+* isCamelCase is now replaced by caseStrategy=CamelCase
+
+### Added
+
+* Added caseStrategy that accept CamelCase | PascalCase | SnakeCase
+
+## 3.6.0 - 2019-10-24
+
+### Added
+
+* Add supports for `byte`
+* Add supports for `sbyte`
+* Add supports for `int16>`
+* Add supports for `uint16`
+* Add supports for `uint32`
+* Add supports for `float32`
+* Add supports for `enum<byte>`
+* Add supports for `enum<sbyte>`
+* Add supports for `enum<int16>`
+* Add supports for `enum<uint16>`
+* Add supports for `enum<int>`
+* Add supports for `enum<uint32>`
+* Add support for `unit`
+* Allow to configure if `null` field should be omitted or no. Set `skipNullField` to `false` when using auto encoder, to include `myField: null` in your json output
+
+### Changed
+
+* Fix #18: Remove the cache limitation when using generateDecoderCached (by &SCullman)
+* Fix Encode.decimal comment (by @alfonsogarciacaro)
+
 ## 3.5.1 - 2019-06-24
 ### Changed
 

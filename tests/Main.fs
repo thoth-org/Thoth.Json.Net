@@ -7,5 +7,7 @@ open Util.Testing
 let main args =
     testList "All" [ Decoders.tests
                      Encoders.tests
+                     BackAndForth.tests
+                     ExtraCoders.tests
                    ]
     |> runTestsWithArgs defaultConfig args
