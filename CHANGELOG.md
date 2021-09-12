@@ -6,10 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 7.0.0 - 2020-10-15
+
+### Removed
+
+* PR #24: Remove broken Converter, people can use https://github.com/DnnFable/Thoth.Json.Net.Formatter as a replacement (by @SCullman)
+
 ## 6.0.0 - 2020-10-15
+
+### Changed
 
 * PR #44: Port API change from Thoth.Json [v6.0.0] Expose the helpers module so it can be used for custom decoders (by @weslenng)
 * PR #43: Port API change from Thoth.Json [v5.1.0] Improve tree shaking for longs (by @weslenng)
+
+### Fixed
+
 * Fix #30: Fix Decode.Auto support for StringEnum
 
 ## 5.0.0 - 2020-10-15
