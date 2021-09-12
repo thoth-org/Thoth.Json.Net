@@ -6,13 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## 7.0.0 - 2020-10-15
+## 7.0.0 - 2021-09-12
 
 ### Removed
 
 * PR #24: Remove broken Converter, people can use https://github.com/DnnFable/Thoth.Json.Net.Formatter as a replacement (by @SCullman)
 
-## 6.0.0 - 2020-10-15
+## 6.0.0 - 2021-09-12
 
 ### Changed
 
