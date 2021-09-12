@@ -1103,12 +1103,34 @@ module Decode =
             kvs |> Result.map (fun kvs -> System.Activator.CreateInstance(t, kvs))
 
 
-    and private makeUnion extra caseStrategy t name (path : string) (values: JsonValue[]) =
+    and private makeUnion extra caseStrategy (t : System.Type) (searchedName : string) (path : string) (values: JsonValue[]) =
         let uci =
             FSharpType.GetUnionCases(t, allowAccessToPrivateRepresentation=true)
-            |> Array.tryFind (fun x -> x.Name = name)
+            |> Array.tryFind (fun uci ->
+                #if !NETFRAMEWORK
+                match t with
+                | Util.Reflection.StringEnum t ->
+                    match uci with
+                    | Util.Reflection.CompiledName name ->
+                        name = searchedName
+
+                    | _ ->
+                        match t.ConstructorArguments with
+                        | Util.Reflection.LowerFirst ->
+                            let adaptedName = uci.Name.[..0].ToLowerInvariant() + uci.Name.[1..]
+                            adaptedName = searchedName
+
+                        | Util.Reflection.Forward ->
+                            uci.Name = searchedName
+                | _ ->
+                    uci.Name = searchedName
+                #else
+                uci.Name = searchedName
+                #endif
+            )
+
         match uci with
-        | None -> (path, FailMessage("Cannot find case " + name + " in " + t.FullName)) |> Error
+        | None -> (path, FailMessage("Cannot find case " + searchedName + " in " + t.FullName)) |> Error
         | Some uci ->
             if values.Length = 0 then
                 FSharpValue.MakeUnion(uci, [||], allowAccessToPrivateRepresentation=true) |> Ok

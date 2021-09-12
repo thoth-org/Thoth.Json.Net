@@ -367,41 +367,6 @@ module Encode =
             Some(fun (v: obj) -> (v :?> System.Guid).ToString())
         else None
 
-    #if !NETFRAMEWORK
-    let private (|StringEnum|_|) (typ : System.Type) =
-        typ.CustomAttributes
-        |> Seq.tryPick (function
-            | attr when attr.AttributeType.FullName = typeof<Fable.Core.StringEnumAttribute>.FullName -> Some attr
-            | _ -> None
-        )
-
-
-    let private (|CompiledName|_|) (caseInfo : UnionCaseInfo) =
-        caseInfo.GetCustomAttributes()
-        |> Seq.tryPick (function
-            | :? CompiledNameAttribute as att -> Some att.CompiledName
-            | _ -> None)
-
-    let private (|LowerFirst|Forward|) (args : IList<System.Reflection.CustomAttributeTypedArgument>) =
-        args
-        |> Seq.tryPick (function
-            | rule when rule.ArgumentType.FullName = typeof<Fable.Core.CaseRules>.FullName -> Some rule
-            | _ -> None
-        )
-        |> function
-        | Some rule ->
-            match rule.Value with
-            | :? int as value ->
-                printfn "%A" value
-                match value with
-                | 0 -> Forward
-                | 1 -> LowerFirst
-                | _ -> LowerFirst // should not happen
-            | _ -> LowerFirst // should not happen
-        | None ->
-            LowerFirst
-    #endif
-
     let rec private autoEncodeRecordsAndUnions extra (caseStrategy : CaseStrategy) (skipNullField : bool) (t: System.Type) : BoxedEncoder =
         // Add the encoder to extra in case one of the fields is recursive
         let encoderRef = ref Unchecked.defaultof<_>
@@ -427,16 +392,16 @@ module Encode =
                     | 0 ->
                         #if !NETFRAMEWORK
                         match t with
-                        // Replicate Fable behaviour when using StringEnum
-                        | StringEnum t ->
+                        // Replicate Fable behavior when using StringEnum
+                        | Util.Reflection.StringEnum t ->
                             match info with
-                            | CompiledName name -> string name
+                            | Util.Reflection.CompiledName name -> string name
                             | _ ->
                                 match t.ConstructorArguments with
-                                | LowerFirst ->
+                                | Util.Reflection.LowerFirst ->
                                     let name = info.Name.[..0].ToLowerInvariant() + info.Name.[1..]
                                     string name
-                                | Forward -> string info.Name
+                                | Util.Reflection.Forward -> string info.Name
 
                         | _ -> string info.Name
                         #else

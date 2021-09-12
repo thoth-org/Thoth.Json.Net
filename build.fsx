@@ -118,6 +118,7 @@ Target.create "AdaptTest" (fun _ ->
     [ "Types.fs"
       "Decoders.fs"
       "Encoders.fs"
+      "BackAndForth.fs"
       "ExtraCoders.fs" ]
     |> List.map (fun fileName ->
          root </> "paket-files" </> "tests" </> "thoth-org" </> "Thoth.Json" </> "tests" </> fileName

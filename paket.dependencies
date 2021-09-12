@@ -14,6 +14,7 @@ group tests
     github thoth-org/Thoth.Json:main tests/Decoders.fs
     github thoth-org/Thoth.Json:main tests/Encoders.fs
     github thoth-org/Thoth.Json:main tests/ExtraCoders.fs
+    github thoth-org/Thoth.Json:main tests/BackAndForth.fs
 
 group netcorebuild
     source https://www.nuget.org/api/v2
