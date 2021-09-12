@@ -7,7 +7,6 @@ open Util.Testing
 let main args =
     testList "All" [ Decoders.tests
                      Encoders.tests
-                     Converter.tests
                      BackAndForth.tests
                      ExtraCoders.tests
                    ]
