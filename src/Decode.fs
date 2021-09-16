@@ -97,10 +97,18 @@ module Decode =
     let fromString (decoder : Decoder<'T>) =
         fun value ->
             try
-                use reader = new JsonTextReader(new StringReader(value), DateParseHandling = DateParseHandling.None)
+                let serializationSettings =
+                    new JsonSerializerSettings(
+                        DateParseHandling = DateParseHandling.None,
+                        CheckAdditionalContent = true
+                    )
 
-                let json = Newtonsoft.Json.Linq.JValue.ReadFrom reader
-                fromValue "$" decoder json
+                let serializer = JsonSerializer.Create(serializationSettings)
+
+                use reader = new JsonTextReader(new StringReader(value))
+                let res = serializer.Deserialize<JToken>(reader)
+
+                fromValue "$" decoder res
             with
                 | :? Newtonsoft.Json.JsonReaderException as ex ->
                     Error("Given an invalid JSON: " + ex.Message)
