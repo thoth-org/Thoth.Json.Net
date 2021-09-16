@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 7.1.0 - 2021-09-12
+
+### Fixed
+
+* Fix #42: Force Newtonsoft to consider the whole JSON at once and not token per token
+
 ## 7.0.0 - 2021-09-12
 
 ### Removed
