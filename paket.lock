@@ -1013,8 +1013,8 @@ GROUP tests
 
 GITHUB
   remote: thoth-org/Thoth.Json
-    tests/BackAndForth.fs (7f6b448ce9ba283b606926eace136eacc148d159)
-    tests/Decoders.fs (7f6b448ce9ba283b606926eace136eacc148d159)
-    tests/Encoders.fs (7f6b448ce9ba283b606926eace136eacc148d159)
-    tests/ExtraCoders.fs (7f6b448ce9ba283b606926eace136eacc148d159)
-    tests/Types.fs (7f6b448ce9ba283b606926eace136eacc148d159)
+    tests/BackAndForth.fs (7a6f556678d450dffc42968fc4d1a84350e4191d)
+    tests/Decoders.fs (7a6f556678d450dffc42968fc4d1a84350e4191d)
+    tests/Encoders.fs (7a6f556678d450dffc42968fc4d1a84350e4191d)
+    tests/ExtraCoders.fs (7a6f556678d450dffc42968fc4d1a84350e4191d)
+    tests/Types.fs (7a6f556678d450dffc42968fc4d1a84350e4191d)

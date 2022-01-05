@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 8.0.0 - 2022-01-05
+
+### Changed
+
+* BREAKING CHANGE: Represent `sbyte` using number instead of string.
+* BREAKING CHANGE: Represent `byte` using number instead of string.
+* BREAKING CHANGE: Represent `int16` using number instead of string.
+* BREAKING CHANGE: Represent `uint16` using number instead of string.
+
 ## 7.1.0 - 2021-09-12
 
 ### Fixed
