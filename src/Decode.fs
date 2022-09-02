@@ -110,7 +110,7 @@ module Decode =
 
                 fromValue "$" decoder res
             with
-                | :? Newtonsoft.Json.JsonReaderException as ex ->
+                | :? Newtonsoft.Json.JsonException as ex ->
                     Error("Given an invalid JSON: " + ex.Message)
 
     let unsafeFromString (decoder : Decoder<'T>) =
