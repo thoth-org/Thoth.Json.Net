@@ -6,11 +6,11 @@
 strategy:
   matrix:
     linux:
-      imageName: 'ubuntu-22.04'
+      imageName: 'ubuntu-20.04'
     mac:
       imageName: 'macOS-11'
     windows:
-      imageName: 'windows-2022'
+      imageName: 'windows-2019'
 
 trigger:
 - master
