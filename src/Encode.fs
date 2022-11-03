@@ -172,22 +172,22 @@ module Encode =
 
 
     let sbyte (value : sbyte) : JsonValue =
-        JValue(value) :> JsonValue
+        JValue(box value) :> JsonValue
 
     let byte (value : byte) : JsonValue =
-        JValue(value) :> JsonValue
+        JValue(box value) :> JsonValue
 
     let int16 (value : int16) : JsonValue =
-        JValue(value) :> JsonValue
+        JValue(box value) :> JsonValue
 
     let uint16 (value : uint16) : JsonValue =
-        JValue(value) :> JsonValue
+        JValue(box value) :> JsonValue
 
     let int (value : int) : JsonValue =
         JValue(value) :> JsonValue
 
     let uint32 (value : uint32) : JsonValue =
-        JValue(value) :> JsonValue
+        JValue(box value) :> JsonValue
 
     let int64 (value : int64) : JsonValue =
         JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
