@@ -4,6 +4,7 @@ open Expecto
 
 let testList name tests = testList name tests
 let testCase msg test = testCase msg test
+let ftestCase msg test = ftestCase msg test
 
 let inline equal expected actual: unit =
     Expect.equal actual expected ""
