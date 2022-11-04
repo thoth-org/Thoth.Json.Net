@@ -12,8 +12,8 @@ nuget Microsoft.SourceLink.GitHub copy_local: true
 
 group tests
     # Get the tests from Thoth.Json repo so both project are in sync
-    github thoth-org/Thoth.Json:main tests/Types.fs
-    github thoth-org/Thoth.Json:main tests/Decoders.fs
-    github thoth-org/Thoth.Json:main tests/Encoders.fs
-    github thoth-org/Thoth.Json:main tests/ExtraCoders.fs
-    github thoth-org/Thoth.Json:main tests/BackAndForth.fs
+    github thoth-org/Thoth.Json:develop tests/Types.fs
+    github thoth-org/Thoth.Json:develop tests/Decoders.fs
+    github thoth-org/Thoth.Json:develop tests/Encoders.fs
+    github thoth-org/Thoth.Json:develop tests/ExtraCoders.fs
+    github thoth-org/Thoth.Json:develop tests/BackAndForth.fs
