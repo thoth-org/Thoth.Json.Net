@@ -698,9 +698,6 @@ module Decode =
             | _,_,_,_,_,_,Error er,_ -> Error er
             | _,_,_,_,_,_,_,Error er -> Error er
 
-    let dict (decoder : Decoder<'value>) : Decoder<Map<string, 'value>> =
-        map Map.ofList (keyValuePairs decoder)
-
     //////////////////////
     // Object builder ///
     ////////////////////
@@ -1020,16 +1017,23 @@ module Decode =
                     |> decoder.BoxedDecoder (path + "." + name)
                     |> Result.map (fun v -> v::result))
 
-    let private mixedArray msg (decoders: BoxedDecoder[]) (path: string) (values: JsonValue[]): Result<obj list, DecoderError> =
-        if decoders.Length <> values.Length then
-            (path, sprintf "Expected %i %s but got %i" decoders.Length msg values.Length
+    let private mixedArray offset (decoders: BoxedDecoder[]) (path: string) (values: JsonValue[]): Result<obj list, DecoderError> =
+        let expectedLength = decoders.Length + offset
+        if expectedLength <> values.Length then
+            (path, sprintf "Expected array of length %i but got %i" expectedLength values.Length
             |> FailMessage) |> Error
         else
-            (values, decoders, Ok [])
-            |||> Array.foldBack2 (fun value decoder acc ->
-                match acc with
-                | Error _ -> acc
-                | Ok result -> decoder.Decode(path, value) |> Result.map (fun v -> v::result))
+            let mutable result = Ok []
+            for i = offset to values.Length - 1 do
+                match result with
+                | Error _ -> ()
+                | Ok acc ->
+                    let path = sprintf "%s[%i]" path i
+                    let decoder = decoders.[i - offset]
+                    let value = values.[i]
+                    result <- decoder.Decode(path, value) |> Result.map (fun v -> v::acc)
+            result
+            |> Result.map List.rev
 
     let private genericOption t (decoder: BoxedDecoder) =
         let ucis = FSharpType.GetUnionCases(t)
@@ -1103,6 +1107,7 @@ module Decode =
                     Error msg
 
     let rec private genericMap extra isCamelCase (t: System.Type) =
+
         let keyType   = t.GenericTypeArguments.[0]
         let valueType = t.GenericTypeArguments.[1]
         let valueDecoder = autoDecoder extra isCamelCase false valueType
@@ -1145,7 +1150,6 @@ module Decode =
                         (path, BadPrimitive ("an array or an object", value)) |> Error
             kvs |> Result.map (fun kvs -> System.Activator.CreateInstance(t, kvs))
 
-
     and private makeUnion extra caseStrategy (t : System.Type) (searchedName : string) (path : string) (values: JsonValue[]) =
         let uci =
             FSharpType.GetUnionCases(t, allowAccessToPrivateRepresentation=true)
@@ -1175,11 +1179,11 @@ module Decode =
         match uci with
         | None -> (path, FailMessage("Cannot find case " + searchedName + " in " + t.FullName)) |> Error
         | Some uci ->
-            if values.Length = 0 then
+            if values.Length <= 1 then // First item is the case name
                 FSharpValue.MakeUnion(uci, [||], allowAccessToPrivateRepresentation=true) |> Ok
             else
                 let decoders = uci.GetFields() |> Array.map (fun fi -> autoDecoder extra caseStrategy false fi.PropertyType)
-                mixedArray "union fields" decoders path values
+                mixedArray 1 decoders path values
                 |> Result.map (fun values -> FSharpValue.MakeUnion(uci, List.toArray values, allowAccessToPrivateRepresentation=true))
 
     and private autoDecodeRecordsAndUnions extra (caseStrategy : CaseStrategy) (isOptional : bool) (t: System.Type): BoxedDecoder =
@@ -1204,9 +1208,10 @@ module Decode =
                         makeUnion extra caseStrategy t name path [||]
                     elif Helpers.isArray(value) then
                         let values = Helpers.asArray value
-                        let name = Helpers.asString values.[0]
-                        makeUnion extra caseStrategy t name path values.[1..]
+                        string (path + "[0]") values.[0]
+                        |> Result.bind (fun name -> makeUnion extra caseStrategy t name path values)
                     else (path, BadPrimitive("a string or array", value)) |> Error)
+
             else
                 if isOptional then
                     // The error will only happen at runtime if the value is not null
@@ -1239,7 +1244,7 @@ module Decode =
                 let decoders = FSharpType.GetTupleElements(t) |> Array.map (autoDecoder extra caseStrategy false)
                 boxDecoder(fun path value ->
                     if Helpers.isArray value then
-                        mixedArray "tuple elements" decoders path (Helpers.asArray value)
+                        mixedArray 0 decoders path (Helpers.asArray value)
                         |> Result.map (fun xs -> FSharpValue.MakeTuple(List.toArray xs, t))
                     else (path, BadPrimitive ("an array", value)) |> Error)
             else
@@ -1251,7 +1256,7 @@ module Decode =
                 // I don't know for now how to support seq
                 // elif fullname = typedefof<obj seq>.FullName then
                 //     autoDecoder extra caseStrategy false t.GenericTypeArguments.[0] |> genericSeq t |> boxDecoder
-                elif fullname = typedefof< Map<string, obj> >.FullName then
+                elif fullname = typedefof< Map<System.IComparable, obj> >.FullName then
                     genericMap extra caseStrategy t |> boxDecoder
                 elif fullname = typedefof< Set<string> >.FullName then
                     let t = t.GenericTypeArguments.[0]
@@ -1328,7 +1333,7 @@ If you can't use one of these types, please pass an extra decoder.
             // elif fullname = typeof<decimal>.FullName then
             //     boxDecoder decimal
             elif fullname = typeof<System.DateTime>.FullName then
-                boxDecoder datetime
+                boxDecoder datetimeUtc
             elif fullname = typeof<System.DateTimeOffset>.FullName then
                 boxDecoder datetimeOffset
             elif fullname = typeof<System.TimeSpan>.FullName then
