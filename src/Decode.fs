@@ -905,6 +905,16 @@ module Decode =
             )
         )
 
+    ///////////
+    // Map ///
+    /////////
+
+    let dict (decoder : Decoder<'value>) : Decoder<Map<string, 'value>> =
+        map Map.ofList (keyValuePairs decoder)
+
+    let map' (keyDecoder : Decoder<'key>) (valueDecoder : Decoder<'value>) : Decoder<Map<'key, 'value>> =
+        map Map.ofSeq (array (tuple2 keyDecoder valueDecoder))
+
     ////////////
     // Enum ///
     /////////
