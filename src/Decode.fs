@@ -286,6 +286,7 @@ module Decode =
             else
                 (path, BadPrimitive("a decimal", token)) |> Error
 
+    [<System.Obsolete("Please use datetimeUtc instead.")>]
     let datetime : Decoder<System.DateTime> =
         fun path token ->
             if Helpers.isDate token then
@@ -293,6 +294,30 @@ module Decode =
             elif Helpers.isString token then
                 match System.DateTime.TryParse (Helpers.asString token, CultureInfo.InvariantCulture, DateTimeStyles.None) with
                 | true, x -> x.ToUniversalTime() |> Ok
+                | _ -> (path, BadPrimitive("a datetime", token)) |> Error
+            else
+                (path, BadPrimitive("a datetime", token)) |> Error
+
+    /// Decode a System.DateTime value using Sytem.DateTime.TryParse, then convert it to UTC.
+    let datetimeUtc : Decoder<System.DateTime> =
+        fun path token ->
+            if Helpers.isDate token then
+                token.Value<System.DateTime>().ToUniversalTime() |> Ok
+            else if Helpers.isString token then
+                match System.DateTime.TryParse (Helpers.asString token) with
+                | true, x -> x.ToUniversalTime() |> Ok
+                | _ -> (path, BadPrimitive("a datetime", token)) |> Error
+            else
+                (path, BadPrimitive("a datetime", token)) |> Error
+
+    /// Decode a System.DateTime with DateTime.TryParse; uses default System.DateTimeStyles.
+    let datetimeLocal : Decoder<System.DateTime> =
+        fun path token ->
+            if Helpers.isDate token then
+                token.Value<System.DateTime>() |> Ok
+            else if Helpers.isString token then
+                match System.DateTime.TryParse (Helpers.asString token) with
+                | true, x -> x |> Ok
                 | _ -> (path, BadPrimitive("a datetime", token)) |> Error
             else
                 (path, BadPrimitive("a datetime", token)) |> Error
