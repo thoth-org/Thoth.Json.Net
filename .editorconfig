@@ -24,3 +24,7 @@ indent_size = 4
 [*.paket.references]
 trim_trailing_whitespace = true
 indent_size = 2
+
+[*.fsproj]
+trim_trailing_whitespace = true
+indent_size = 2

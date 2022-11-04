@@ -1,25 +1,36 @@
 <Project Sdk="Microsoft.NET.Sdk">
-    <PropertyGroup>
-        <Description>Elm-inspired encoder and decoder for JSON targetting .Net and NetCore runtime</Description>
-        <PackageProjectUrl>https://github.com/thoth-org/Thoth.Json.Net</PackageProjectUrl>
-        <PackageLicenseUrl>https://github.com/thoth-org/Thoth.Json.Net/blob/master/LICENSE.md</PackageLicenseUrl>
-        <RepositoryUrl>https://github.com/thoth-org/Thoth.Json.Net</RepositoryUrl>
-        <PackageTags>fsharp;json</PackageTags>
-        <Authors>Maxime Mangel</Authors>
-        <Version>8.0.0</Version>
-    </PropertyGroup>
-    <PropertyGroup>
-        <TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    </PropertyGroup>
-    <ItemGroup>
-        <PackageReference Condition="'$(TargetFramework)' == 'netstandard2.0'" Include="Fable.Core" Version="[3.0,4.0)" />
-    </ItemGroup>
-    <ItemGroup>
-        <Compile Include="Types.fs" />
-        <Compile Include="Decode.fs" />
-        <Compile Include="Encode.fs" />
-        <Compile Include="Extra.fs" />
-    </ItemGroup>
-    <Import Project="..\.paket\Paket.Restore.targets" />
+  <PropertyGroup>
+    <Description>Elm-inspired encoder and decoder for JSON targetting .Net and NetCore runtime</Description>
+    <PackageProjectUrl>https://thoth-org.github.io/Thoth.Json/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/thoth-org/Thoth.Json.Net</RepositoryUrl>
+    <ChangelogFile>$(MSBuildThisFileDirectory)\..\CHANGELOG.md</ChangelogFile>
+    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>fable;fable-library;fable-dotnet;fsharp;json</PackageTags>
+    <Authors>Maxime Mangel</Authors>
+  </PropertyGroup>
+  <!-- For SourceLink. See: https://github.com/dotnet/sourcelink#using-source-link-in-net-projects -->
+  <PropertyGroup>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)\..\LICENSE.md" Pack="true" PackagePath="$(PackageLicenseFile)" />
+    <None Include="$(MSBuildThisFileDirectory)\..\README.md" Pack="true" PackagePath="$(PackageReadmeFile)" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Types.fs" />
+    <Compile Include="Decode.fs" />
+    <Compile Include="Encode.fs" />
+    <Compile Include="Extra.fs" />
+  </ItemGroup>
+  <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

@@ -1,278 +1,201 @@
-#r "paket: groupref netcorebuild //"
-#load ".fake/build.fsx/intellisense.fsx"
-#if !FAKE
-#r "Facades/netstandard"
-#r "netstandard"
-#endif
+#r "nuget: Fun.Build, 0.2.4"
+#r "nuget: Fake.IO.FileSystem, 5.23.1"
+#r "nuget: Fake.Core.Environment, 5.23.1"
+#r "nuget: Fake.Tools.Git, 5.23.1"
+#r "nuget: Fake.Api.GitHub, 5.23.1"
+#r "nuget: SimpleExec, 11.0.0"
+#r "nuget: BlackFox.CommandLine, 1.0.0"
 
-#nowarn "52"
-
-open System
-open System.IO
-open System.Text.RegularExpressions
-open Fake.Core
-open Fake.Core.TargetOperators
-open Fake.DotNet
+open Fun.Build
 open Fake.IO
 open Fake.IO.Globbing.Operators
 open Fake.IO.FileSystemOperators
+open System.IO
+open Fake.Core
 open Fake.Tools
-open Fake.JavaScript
 open Fake.Api
-
-let versionFromGlobalJson : DotNet.CliInstallOptions -> DotNet.CliInstallOptions = (fun o ->
-        { o with Version = DotNet.Version (DotNet.getSDKVersionFromGlobalJson()) }
-    )
-
-let dotnetSdk = lazy DotNet.install versionFromGlobalJson
-let inline dtntWorkDir wd =
-    DotNet.Options.lift dotnetSdk.Value
-    >> DotNet.Options.withWorkingDirectory wd
-
-let inline yarnWorkDir (ws : string) (yarnParams : Yarn.YarnParams) =
-    { yarnParams with WorkingDirectory = ws }
+open System.Text.RegularExpressions
+open BlackFox.CommandLine
 
 let root = __SOURCE_DIRECTORY__
-
-module Source =
-    let dir = root </> "src"
-    let projectFile = dir </> "Thoth.Json.Net.fsproj"
-
-module Tests =
-    let dir = root </> "tests"
-    let projectFile = dir </> "Tests.fsproj"
-
 let gitOwner = "thoth-org"
 let repoName = "Thoth.Json.Net"
 
-module Util =
+module Changelog =
 
-    let visitFile (visitor: string -> string) (fileName : string) =
-        File.ReadAllLines(fileName)
-        |> Array.map (visitor)
-        |> fun lines -> File.WriteAllLines(fileName, lines)
+    let versionRegex = Regex("^## ?\\[?v?([\\w\\d.-]+\\.[\\w\\d.-]+[a-zA-Z0-9])\\]?", RegexOptions.IgnoreCase)
 
-    let replaceLines (replacer: string -> Match -> string option) (reg: Regex) (fileName: string) =
-        fileName |> visitFile (fun line ->
-            let m = reg.Match(line)
-            if not m.Success
-            then line
+    let getLastVersion (changelodPath : string) =
+        File.ReadLines changelodPath
+            |> Seq.tryPick (fun line ->
+                let m = versionRegex.Match(line)
+                if m.Success then Some m else None)
+            |> function
+                | None -> failwith "Couldn't find version in changelog file"
+                | Some m ->
+                    m.Groups.[1].Value
+
+    let isPreRelease (version : string) =
+        let regex = Regex(".*(alpha|beta|rc).*", RegexOptions.IgnoreCase)
+        regex.IsMatch(version)
+
+    let getNotesForVersion (version : string) =
+        File.ReadLines("CHANGELOG.md")
+        |> Seq.skipWhile(fun line ->
+            let m = versionRegex.Match(line)
+
+            if m.Success then
+                (m.Groups.[1].Value <> version)
             else
-                match replacer line m with
-                | None -> line
-                | Some newLine -> newLine)
-
-// Module to print colored message in the console
-module Logger =
-    let consoleColor (fc : ConsoleColor) =
-        let current = Console.ForegroundColor
-        Console.ForegroundColor <- fc
-        { new IDisposable with
-              member x.Dispose() = Console.ForegroundColor <- current }
-
-    let warn str = Printf.kprintf (fun s -> use c = consoleColor ConsoleColor.DarkYellow in printf "%s" s) str
-    let warnfn str = Printf.kprintf (fun s -> use c = consoleColor ConsoleColor.DarkYellow in printfn "%s" s) str
-    let error str = Printf.kprintf (fun s -> use c = consoleColor ConsoleColor.Red in printf "%s" s) str
-    let errorfn str = Printf.kprintf (fun s -> use c = consoleColor ConsoleColor.Red in printfn "%s" s) str
-
-let run (cmd:string) dir args  =
-    Command.RawCommand(cmd, Arguments.OfArgs args)
-    |> CreateProcess.fromCommand
-    |> CreateProcess.withWorkingDirectory dir
-    |> Proc.run
-    |> ignore
-
-Target.create "Clean" (fun _ ->
-    !! "src/**/bin"
-    ++ "src/**/obj"
-    ++ "tests/**/bin"
-    ++ "tests/**/obj"
-    ++ "temp/"
-    |> Shell.cleanDirs
-)
-
-Target.create "YarnInstall"(fun _ ->
-    Yarn.install id
-)
-
-Target.create "DotnetRestore" (fun _ ->
-    DotNet.restore (dtntWorkDir Source.dir) ""
-    DotNet.restore (dtntWorkDir Tests.dir) ""
-)
-
-let mono workingDir args =
-    Command.RawCommand("mono", Arguments.OfArgs args)
-    |> CreateProcess.fromCommand
-    |> CreateProcess.withWorkingDirectory workingDir
-    |> Proc.run
-    |> ignore
-
-let build project framework =
-    DotNet.build (fun p ->
-        { p with Framework = Some framework } ) project
-
-let testNetFrameworkDir = root </> "tests" </> "bin" </> "Release" </> "net461"
-let testNetCoreDir = root </> "tests" </> "bin" </> "Release" </> "netcoreapp3.0"
-
-Target.create "AdaptTest" (fun _ ->
-    [ "Types.fs"
-      "Decoders.fs"
-      "Encoders.fs"
-      "BackAndForth.fs"
-      "ExtraCoders.fs" ]
-    |> List.map (fun fileName ->
-         root </> "paket-files" </> "tests" </> "thoth-org" </> "Thoth.Json" </> "tests" </> fileName
-    )
-    |> List.iter (fun path ->
-        File.ReadLines path
-        |> Seq.toList
-        |> List.map (fun originalLine ->
-            match originalLine.Trim() with
-            | "open Thoth.Json" -> "open Thoth.Json.Net"
-            // | "open Fable.Core"
-            | "open Fable.Core.JsInterop" -> ""
-            | _ -> originalLine
+                true
         )
-        // This is important to manually concat the lines using `\n` otherwise we end up with `CRLF`
-        // and the tests will fail on Windows
-        |> String.concat "\n"
-        |> File.writeString false path
-    )
-)
-
-Target.create "Test" (fun _ ->
-    build Tests.projectFile "netcoreapp3.0"
-    build Tests.projectFile "net461"
-
-    if Environment.isUnix then
-        mono testNetFrameworkDir [ "Tests.exe" ]
-    else
-        run (testNetFrameworkDir </> "Tests.exe") root []
-
-    let result = DotNet.exec (dtntWorkDir testNetCoreDir) "" "Tests.dll"
-
-    if not result.OK then failwithf "Expecto for netcore tests failed."
-)
-
-let needsPublishing (versionRegex: Regex) (newVersion: string) projFile =
-    printfn "Project: %s" projFile
-    if newVersion.ToUpper().EndsWith("NEXT")
-        || newVersion.ToUpper().EndsWith("UNRELEASED")
-    then
-        Logger.warnfn "Version marked as unreleased version in Changelog, don't publish yet."
-        false
-    else
-        File.ReadLines(projFile)
-        |> Seq.tryPick (fun line ->
+        // Remove the version line
+        |> Seq.skip 1
+        // Take all until the next version line
+        |> Seq.takeWhile (fun line ->
             let m = versionRegex.Match(line)
-            if m.Success then Some m else None)
-        |> function
-            | None -> failwith "Couldn't find version in project file"
-            | Some m ->
-                let sameVersion = m.Groups.[1].Value = newVersion
-                if sameVersion then
-                    Logger.warnfn "Already version %s, no need to publish." newVersion
-                not sameVersion
+            not m.Success
+        )
 
-let pushNuget (newVersion: string) (projFile: string) =
-    let versionRegex = Regex("<Version>(.*?)</Version>", RegexOptions.IgnoreCase)
+module Stages =
 
-    if needsPublishing versionRegex newVersion projFile then
-
-        let nugetKey =
-            match Environment.environVarOrNone "NUGET_KEY" with
-            | Some nugetKey -> nugetKey
-            | None -> failwith "The Nuget API key must be set in a NUGET_KEY environmental variable"
-
-        (versionRegex, projFile) ||> Util.replaceLines (fun line _ ->
-            versionRegex.Replace(line, "<Version>" + newVersion + "</Version>") |> Some)
-
-        DotNet.pack (fun p ->
-                DotNet.Options.lift dotnetSdk.Value p
+    let clean =
+        stage "Clean" {
+            run (fun _ ->
+                !! "src/**/bin"
+                ++ "src/**/obj"
+                ++ "tests/**/bin"
+                ++ "tests/**/obj"
+                ++ "temp/"
+                |> Shell.cleanDirs
             )
-            projFile
+        }
 
-        let projDir = Path.GetDirectoryName(projFile)
+    let adaptTest =
+        stage "AdaptTest" {
+            // First install the dependencies with Paket
+            run "dotnet paket install"
 
-        Directory.GetFiles(projDir </> "bin" </> "Release", "*.nupkg")
-        |> Array.find (fun nupkg -> nupkg.Contains(newVersion))
-        |> (fun nupkg ->
-            DotNet.nugetPush (fun p ->
-                { p with
-                    PushParams =
-                        { p.PushParams with
-                            ApiKey = Some nugetKey
-                            Source = Some "nuget.org"
-                        }
-                 }
-            ) nupkg
+            // Now that the files are present, we can adapt them
+            run (fun _ ->
+                [
+                    "Types.fs"
+                    "Decoders.fs"
+                    "Encoders.fs"
+                    "BackAndForth.fs"
+                    "ExtraCoders.fs"
+                ]
+                |> List.map (fun fileName ->
+                    root </> "paket-files" </> "tests" </> "thoth-org" </> "Thoth.Json" </> "tests" </> fileName
+                )
+                |> List.iter (fun path ->
+                    File.ReadLines path
+                    |> Seq.toList
+                    |> List.map (fun originalLine ->
+                        match originalLine.Trim() with
+                        | "open Thoth.Json" -> "open Thoth.Json.Net"
+                        // | "open Fable.Core"
+                        | "open Fable.Core.JsInterop" -> ""
+                        | _ -> originalLine
+                    )
+                    // This is important to manually concat the lines using `\n` otherwise we end up with `CRLF`
+                    // and the tests will fail on Windows
+                    |> String.concat "\n"
+                    |> File.writeString false path
+                )
+            )
+        }
+
+    let test =
+
+        stage "Test" {
+            run "dotnet build tests --configuration Release --framework net6.0"
+            run "dotnet build tests --configuration Release --framework net461"
+
+            stage "NetFramework - Unix" {
+                whenAny {
+                    platformOSX
+                    platformLinux
+                }
+                run "mono ./tests/bin/Release/net461/Tests.exe"
+            }
+
+            stage "NetFramework - Windows" {
+                whenWindows
+                run "tests/bin/Release/net461/Tests.exe"
+            }
+
+            run "dotnet tests/bin/Release/net6.0/Tests.dll"
+        }
+
+
+pipeline "Setup" {
+    description "Setup the project by (cleaning artefacts, adaptiong the tests files, etc.)"
+    workingDir __SOURCE_DIRECTORY__
+
+    Stages.clean
+    Stages.adaptTest
+
+    runIfOnlySpecified
+}
+
+pipeline "Test" {
+    description "Run the tests"
+    workingDir __SOURCE_DIRECTORY__
+
+    Stages.clean
+    Stages.adaptTest
+    Stages.test
+
+    runIfOnlySpecified
+}
+
+pipeline "Release" {
+    description "Release the project on Nuget and GitHub"
+    workingDir __SOURCE_DIRECTORY__
+
+    Stages.clean
+    Stages.adaptTest
+    Stages.test
+
+    stage "Publish packages to NuGet" {
+        run "dotnet pack src -c Release"
+        whenAll {
+            branch "main"
+            envVar "NUGET_KEY"
+        }
+
+        run (fun ctx ->
+            let nugetKey = ctx.GetEnvVar "NUGET_KEY"
+            cmd $"dotnet nuget push *.nupkg -s https://api.nuget.org/v3/index.json -k {nugetKey}"
         )
+    }
 
-let versionRegex = Regex("^## ?\\[?v?([\\w\\d.-]+\\.[\\w\\d.-]+[a-zA-Z0-9])\\]?", RegexOptions.IgnoreCase)
+    stage "Release on Github" {
+        whenAll {
+            branch "main"
+            envVar "GITHUB_TOKEN"
+        }
 
-let getLastVersion () =
-    File.ReadLines("CHANGELOG.md")
-        |> Seq.tryPick (fun line ->
-            let m = versionRegex.Match(line)
-            if m.Success then Some m else None)
-        |> function
-            | None -> failwith "Couldn't find version in changelog file"
-            | Some m ->
-                m.Groups.[1].Value
+        run (fun ctx ->
+            let githubToken = ctx.GetEnvVar "GITHUB_TOKEN"
 
-let isPreRelease (version : string) =
-    let regex = Regex(".*(alpha|beta|rc).*", RegexOptions.IgnoreCase)
-    regex.IsMatch(version)
+            let version = Changelog.getLastVersion "CHANGELOG.md"
+            let isPreRelease = Changelog.isPreRelease version
+            let notes = Changelog.getNotesForVersion version
 
-let getNotes (version : string) =
-    File.ReadLines("CHANGELOG.md")
-    |> Seq.skipWhile(fun line ->
-        let m = versionRegex.Match(line)
+            Git.Staging.stageAll root
+            let commitMsg = $"Release version {version}"
+            Git.Commit.exec root commitMsg
+            Git.Branches.push root
 
-        if m.Success then
-            (m.Groups.[1].Value <> version)
-        else
-            true
-    )
-    // Remove the version line
-    |> Seq.skip 1
-    // Take all until the next version line
-    |> Seq.takeWhile (fun line ->
-        let m = versionRegex.Match(line)
-        not m.Success
-    )
+            GitHub.createClientWithToken githubToken
+            |> GitHub.draftNewRelease gitOwner repoName version isPreRelease notes
+            |> GitHub.publishDraft
+        )
+    }
 
-Target.create "Publish" (fun _ ->
-    let version = getLastVersion()
-    pushNuget version Source.projectFile
-)
+    runIfOnlySpecified
+}
 
-Target.create "Release" (fun _ ->
-    let version = getLastVersion()
-
-    Git.Staging.stageAll root
-    let commitMsg = sprintf "Release version %s" version
-    Git.Commit.exec root commitMsg
-    Git.Branches.push root
-
-    let token =
-        match Environment.environVarOrDefault "GITHUB_TOKEN" "" with
-        | s when not (System.String.IsNullOrWhiteSpace s) -> s
-        | _ -> failwith "The Github token must be set in a GITHUB_TOKEN environmental variable"
-
-    GitHub.createClientWithToken token
-    |> GitHub.draftNewRelease gitOwner repoName version (isPreRelease version) (getNotes version)
-    |> GitHub.publishDraft
-    |> Async.RunSynchronously
-
-)
-
-"Clean"
-    ==> "YarnInstall"
-    ==> "DotnetRestore"
-    ==> "AdaptTest"
-    ==> "Test"
-    ==> "Publish"
-    ==> "Release"
-
-Target.runOrList ()
+tryPrintPipelineCommandHelp ()

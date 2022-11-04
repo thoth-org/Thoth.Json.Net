@@ -6,11 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## Fixed
+### Fixed
 
 * BREAKING CHANGE: Encode `sbyte`, `byte`, `int16`, `uint16`, `uint32` using integer representation instead of decimal.
 
     `12u` is represented using `12` instead of `12.0`. I don't know why Newtonsoft.Json defaults to decimal representation for these types.
+
+### Added
+
+* Add source link support.
 
 ## 8.0.0 - 2022-01-05
 
