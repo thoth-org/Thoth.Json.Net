@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 9.0.0 - 2022-11-09
+
 ### Fixed
 
 * BREAKING CHANGE: Encode `sbyte`, `byte`, `int16`, `uint16`, `uint32` using integer representation instead of decimal.

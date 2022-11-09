@@ -167,7 +167,7 @@ pipeline "Release" {
 
         run (fun ctx ->
             let nugetKey = ctx.GetEnvVar "NUGET_KEY"
-            cmd $"dotnet nuget push *.nupkg -s https://api.nuget.org/v3/index.json -k {nugetKey}"
+            cmd $"dotnet nuget push src/bin/Release/*.nupkg -s https://api.nuget.org/v3/index.json -k {nugetKey}"
         )
     }
 
