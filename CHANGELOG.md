@@ -11,10 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * BREAKING CHANGE: Encode `sbyte`, `byte`, `int16`, `uint16`, `uint32` using integer representation instead of decimal.
 
     `12u` is represented using `12` instead of `12.0`. I don't know why Newtonsoft.Json defaults to decimal representation for these types.
+* Fix path when auto decoding unions
+* Fix auto coders for nested anon records
 
 ### Added
 
 * Add source link support.
+* Add `Decode.map'` and `Encode.map` to support `Map<'Key, 'Value>`
+* Add `Decode.datetimeUtc`, `Decode.datetimeLocal`
+
+### Deprecated
+
+* Mark `Decode.datetime` as deprecated
 
 ## 8.0.0 - 2022-01-05
 
