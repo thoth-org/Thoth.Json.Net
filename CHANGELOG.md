@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Add `Decode.map'` and `Encode.map` to support `Map<'Key, 'Value>`
 * Add `Decode.datetimeUtc`, `Decode.datetimeLocal`
 * Add `Encode.Auto.toString(value)` which is equivalent to `Encode.Auto.toString(0, value)`
+* Add doc comment to `Decode.fromValue`, `Decode.fromString`, `Decode.unsafeFromString`
 
 ### Changed
 

@@ -86,6 +86,25 @@ module Decode =
     // Runners ///
     /////////////
 
+    /// <summary>
+    /// Runs the decoder against the given JSON value.
+    ///
+    /// If the decoder fails, it reports the error prefixed with the given path.
+    ///
+    /// </summary>
+    /// <example>
+    /// <code lang="fsharp">
+    /// module Decode =
+    ///     let fromRootValue (decoder : Decoder&lt;'T&gt;) =
+    ///         Decode.fromValue "$" decoder
+    /// </code>
+    /// </example>
+    /// <param name="path">Path used to report the error</param>
+    /// <param name="decoder">Decoder to apply</param>
+    /// <param name="value">JSON value to decoder</param>
+    /// <returns>
+    /// Returns <c>Ok</c> if the decoder succeeds, otherwise <c>Error</c> with the error message.
+    /// </returns>
     let fromValue (path : string) (decoder : Decoder<'T>) =
         fun value ->
             match decoder path value with
@@ -94,6 +113,14 @@ module Decode =
             | Error error ->
                 Error (errorToString error)
 
+    /// <summary>
+    /// Parse the provided string in as JSON and then run the decoder against it.
+    /// </summary>
+    /// <param name="decoder">Decoder to apply</param>
+    /// <param name="value">JSON string to decode</param>
+    /// <returns>
+    /// Returns <c>Ok</c> if the decoder succeeds, otherwise <c>Error</c> with the error message.
+    /// </returns>
     let fromString (decoder : Decoder<'T>) =
         fun value ->
             try
@@ -113,6 +140,14 @@ module Decode =
                 | :? JsonException as ex ->
                     Error("Given an invalid JSON: " + ex.Message)
 
+    /// <summary>
+    /// Parse the provided string in as JSON and then run the decoder against it.
+    /// </summary>
+    /// <param name="decoder">Decoder to apply</param>
+    /// <param name="value">JSON string to decode</param>
+    /// <returns>
+    /// Return the decoded value if the decoder succeeds, otherwise throws an exception.
+    /// </returns>
     let unsafeFromString (decoder : Decoder<'T>) =
         fun value ->
             match fromString decoder value with
