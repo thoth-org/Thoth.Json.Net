@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Add `Encode.Auto.toString(value)` which is equivalent to `Encode.Auto.toString(0, value)`
 * Add doc comment to `Decode.fromValue`, `Decode.fromString`, `Decode.unsafeFromString`
 * Add support for `char`
+* Add link to the "extra coders" section when coders fail for missing types information
 
 ### Changed
 

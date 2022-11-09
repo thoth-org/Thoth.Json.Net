@@ -1264,8 +1264,11 @@ module Decode =
                     // See https://github.com/MangelMaxime/Thoth/pull/84#issuecomment-444837773
                     boxDecoder(fun path value -> Error(path, BadType("an extra coder for " + t.FullName, value)))
                 else
-                    failwithf "Cannot generate auto decoder for %s. Please pass an extra decoder." t.FullName
-        decoderRef := decoder
+                    failwithf """Cannot generate auto decoder for %s. Please pass an extra decoder.
+
+Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation/auto/extra-coders.html#ready-to-use-extra-coders""" t.FullName
+
+        decoderRef.Value <- decoder
         decoder
 
 
@@ -1342,7 +1345,10 @@ Thoth.Json.Net only support the folluwing enum types:
 - uint16
 - int
 - uint32
+
 If you can't use one of these types, please pass an extra decoder.
+
+Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation/auto/extra-coders.html#ready-to-use-extra-coders
                     """ t.FullName
         else
             if fullname = typeof<bool>.FullName then

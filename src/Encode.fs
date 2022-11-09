@@ -426,8 +426,10 @@ module Encode =
                             target.[i] <- encoder.Encode(fields.[i-1])
                         array target)
             else
-                failwithf "Cannot generate auto encoder for %s. Please pass an extra encoder." t.FullName
-        encoderRef := encoder
+                failwithf """Cannot generate auto encoder for %s. Please pass an extra encoder.
+
+Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation/auto/extra-coders.html#ready-to-use-extra-coders""" t.FullName
+        encoderRef.Value <- encoder
         encoder
 
     and private genericSeq (encoder: BoxedEncoder) =
