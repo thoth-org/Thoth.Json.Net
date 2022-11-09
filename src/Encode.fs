@@ -23,6 +23,9 @@ module Encode =
     let string (value : string) : JsonValue =
         JValue(value) :> JsonValue
 
+    let inline char (value : char) : JsonValue =
+        JValue(value) :> JsonValue
+
     ///**Description**
     /// Encode a GUID
     ///
@@ -522,6 +525,8 @@ If you can't use one of these types, please pass an extra encoder.
                 boxEncoder unit
             elif fullname = typeof<string>.FullName then
                 boxEncoder string
+            elif fullname = typeof<char>.FullName then
+                boxEncoder char
             elif fullname = typeof<sbyte>.FullName then
                 boxEncoder sbyte
             elif fullname = typeof<byte>.FullName then
