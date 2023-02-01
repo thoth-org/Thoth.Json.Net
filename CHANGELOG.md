@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 10.1.0 - 2023-02-01
+
+### Changed
+
+* Fix #51: Relax `Fable.Core` restriction to `>= 3` allowing use of Fable.Core 4
+
 ## 10.0.0 - 2022-12-04
 
 ### Changed
