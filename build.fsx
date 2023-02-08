@@ -1,4 +1,4 @@
-#r "nuget: Fun.Build, 0.2.4"
+#r "nuget: Fun.Build, 0.2.9"
 #r "nuget: Fake.IO.FileSystem, 5.23.1"
 #r "nuget: Fake.Core.Environment, 5.23.1"
 #r "nuget: Fake.Tools.Git, 5.23.1"
@@ -154,16 +154,18 @@ pipeline "Release" {
     description "Release the project on Nuget and GitHub"
     workingDir __SOURCE_DIRECTORY__
 
+    whenAll {
+        branch "main"
+        envVar "NUGET_KEY"
+        envVar "GITHUB_TOKEN"
+    }
+
     Stages.clean
     Stages.adaptTest
     Stages.test
 
     stage "Publish packages to NuGet" {
         run "dotnet pack src -c Release"
-        whenAll {
-            branch "main"
-            envVar "NUGET_KEY"
-        }
 
         run (fun ctx ->
             let nugetKey = ctx.GetEnvVar "NUGET_KEY"
@@ -172,11 +174,6 @@ pipeline "Release" {
     }
 
     stage "Release on Github" {
-        whenAll {
-            branch "main"
-            envVar "GITHUB_TOKEN"
-        }
-
         run (fun ctx ->
             let githubToken = ctx.GetEnvVar "GITHUB_TOKEN"
 
