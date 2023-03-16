@@ -1264,7 +1264,7 @@ module Decode =
     and private autoDecodeRecordsAndUnions extra (caseStrategy : CaseStrategy) (isOptional : bool) (t: System.Type): BoxedDecoder =
         // Add the decoder to extra in case one of the fields is recursive
         let decoderRef = ref Unchecked.defaultof<_>
-        let extra = extra |> Map.add t.FullName decoderRef
+        let extra = extra |> Map.add (getTypeName t) decoderRef
         let decoder =
             if FSharpType.IsRecord(t, allowAccessToPrivateRepresentation=true) then
                 let decoders =
@@ -1301,8 +1301,8 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
         decoder
 
 
-    and private autoDecoder (extra: Map<string, ref<BoxedDecoder>>) caseStrategy (isOptional : bool) (t: System.Type) : BoxedDecoder =
-      let fullname = t.FullName
+    and private autoDecoder (extra: Map<TypeName, ref<BoxedDecoder>>) caseStrategy (isOptional : bool) (t: System.Type) : BoxedDecoder =
+      let fullname = getTypeName t
       match Map.tryFind fullname extra with
       | Some decoderRef -> boxDecoder(fun path value -> decoderRef.contents.BoxedDecoder path value)
       | None ->
@@ -1380,29 +1380,29 @@ If you can't use one of these types, please pass an extra decoder.
 Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation/auto/extra-coders.html#ready-to-use-extra-coders
                     """ t.FullName
         else
-            if fullname = typeof<bool>.FullName then
+            if fullname = getTypeName typeof<bool> then
                 boxDecoder bool
-            elif fullname = typedefof<unit>.FullName then
+            elif fullname = getTypeName typedefof<unit> then
                 boxDecoder unit
-            elif fullname = typeof<string>.FullName then
+            elif fullname = getTypeName typeof<string> then
                 boxDecoder string
-            elif fullname = typeof<char>.FullName then
+            elif fullname = getTypeName typeof<char> then
                 boxDecoder char
-            elif fullname = typeof<sbyte>.FullName then
+            elif fullname = getTypeName typeof<sbyte> then
                 boxDecoder sbyte
-            elif fullname = typeof<byte>.FullName then
+            elif fullname = getTypeName typeof<byte> then
                 boxDecoder byte
-            elif fullname = typeof<int16>.FullName then
+            elif fullname = getTypeName typeof<int16> then
                 boxDecoder int16
-            elif fullname = typeof<uint16>.FullName then
+            elif fullname = getTypeName typeof<uint16> then
                 boxDecoder uint16
-            elif fullname = typeof<int>.FullName then
+            elif fullname = getTypeName typeof<int> then
                 boxDecoder int
-            elif fullname = typeof<uint32>.FullName then
+            elif fullname = getTypeName typeof<uint32> then
                 boxDecoder uint32
-            elif fullname = typeof<float>.FullName then
+            elif fullname = getTypeName typeof<float> then
                 boxDecoder float
-            elif fullname = typeof<float32>.FullName then
+            elif fullname = getTypeName typeof<float32> then
                 boxDecoder float32
             // These number types require extra libraries in Fable. To prevent penalizing
             // all users, extra decoders (withInt64, etc) must be passed when they're needed.
@@ -1415,15 +1415,15 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
             //     boxDecoder bigint
             // elif fullname = typeof<decimal>.FullName then
             //     boxDecoder decimal
-            elif fullname = typeof<System.DateTime>.FullName then
+            elif fullname = getTypeName typeof<System.DateTime> then
                 boxDecoder datetimeUtc
-            elif fullname = typeof<System.DateTimeOffset>.FullName then
+            elif fullname = getTypeName typeof<System.DateTimeOffset> then
                 boxDecoder datetimeOffset
-            elif fullname = typeof<System.TimeSpan>.FullName then
+            elif fullname = getTypeName typeof<System.TimeSpan> then
                 boxDecoder timespan
-            elif fullname = typeof<System.Guid>.FullName then
+            elif fullname = getTypeName typeof<System.Guid> then
                 boxDecoder guid
-            elif fullname = typeof<obj>.FullName then
+            elif fullname = getTypeName typeof<obj> then
                 boxDecoder (fun _ v ->
                     if Helpers.isNullValue v then Ok(null: obj)
                     else v.Value<obj>() |> Ok)
