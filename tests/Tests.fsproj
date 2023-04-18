@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net6.0;net461</TargetFrameworks>
+    <TargetFramework>net6.0</TargetFramework>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
@@ -9,27 +9,17 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Util.fs" />
-    <Compile Include="..\paket-files\tests\thoth-org\Thoth.Json\tests\Types.fs">
-      <Paket>True</Paket>
-      <Link>paket-files/Types.fs</Link>
-    </Compile>
-    <Compile Include="..\paket-files\tests\thoth-org\Thoth.Json\tests\Encoders.fs">
-      <Paket>True</Paket>
-      <Link>paket-files/Encoders.fs</Link>
-    </Compile>
-    <Compile Include="..\paket-files\tests\thoth-org\Thoth.Json\tests\Decoders.fs">
-      <Paket>True</Paket>
-      <Link>paket-files/Decoders.fs</Link>
-    </Compile>
-    <Compile Include="..\paket-files\tests\thoth-org\Thoth.Json\tests\BackAndForth.fs">
-      <Paket>True</Paket>
-      <Link>paket-files/BackAndForth.fs</Link>
-    </Compile>
-    <Compile Include="..\paket-files\tests\thoth-org\Thoth.Json\tests\ExtraCoders.fs">
-      <Paket>True</Paket>
-      <Link>paket-files/ExtraCoders.fs</Link>
-    </Compile>
+    <Compile Include="Types.fs" />
+    <Compile Include="Decoders.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
-  <Import Project="..\.paket\Paket.Restore.targets" />
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="6.0.7" />
+    <PackageReference Update="Expecto">
+      <Version>9.0.4</Version>
+    </PackageReference>
+    <PackageReference Update="Mono.Cecil">
+      <Version>0.11.4</Version>
+    </PackageReference>
+  </ItemGroup>
 </Project>

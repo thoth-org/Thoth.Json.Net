@@ -1,13 +1,14 @@
 namespace Thoth.Json.Net
 
+open System.Text
+open System.Text.Json.Nodes
+
 [<RequireQualifiedAccess>]
 module Encode =
-
     open System.Globalization
     open System.Collections.Generic
-    open Newtonsoft.Json
-    open Newtonsoft.Json.Linq
     open System.IO
+    open System.Text.Json
 
     ///**Description**
     /// Encode a string
@@ -20,11 +21,11 @@ module Encode =
     ///
     ///**Exceptions**
     ///
-    let string (value : string) : JsonValue =
-        JValue(value) :> JsonValue
+    let string (value : string) : JsonNode =
+        JsonValue.Create(value)
 
-    let inline char (value : char) : JsonValue =
-        JValue(value) :> JsonValue
+    let inline char (value : char) : JsonNode =
+        JsonValue.Create(value)
 
     ///**Description**
     /// Encode a GUID
@@ -37,7 +38,7 @@ module Encode =
     ///
     ///**Exceptions**
     ///
-    let guid (value : System.Guid) : JsonValue =
+    let guid (value : System.Guid) : JsonNode =
         value.ToString() |> string
 
     ///**Description**
@@ -51,11 +52,11 @@ module Encode =
     ///
     ///**Exceptions**
     ///
-    let float (value : float) : JsonValue =
-        JValue(value) :> JsonValue
+    let float (value : float) : JsonNode =
+        JsonValue.Create(value)
 
-    let float32 (value : float32) : JsonValue =
-        JValue(value) :> JsonValue
+    let float32 (value : float32) : JsonNode =
+        JsonValue.Create(value)
 
     ///**Description**
     /// Encode a Decimal.
@@ -68,8 +69,8 @@ module Encode =
     ///
     ///**Exceptions**
     ///
-    let decimal (value : decimal) : JsonValue =
-        JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
+    let decimal (value: decimal) : JsonNode =
+        JsonValue.Create(value.ToString(CultureInfo.InvariantCulture))
 
     ///**Description**
     /// Encode null
@@ -81,8 +82,8 @@ module Encode =
     ///
     ///**Exceptions**
     ///
-    let nil : JsonValue =
-        JValue.CreateNull() :> JsonValue
+    let nil: JsonNode =
+        JsonValue.Create(null)
 
     ///**Description**
     /// Encode a bool
@@ -94,8 +95,8 @@ module Encode =
     ///
     ///**Exceptions**
     ///
-    let bool (value : bool) : JsonValue =
-        JValue(value) :> JsonValue
+    let bool (value: bool) : JsonNode =
+        JsonValue.Create(value)
 
     ///**Description**
     /// Encode an object
@@ -108,12 +109,12 @@ module Encode =
     ///
     ///**Exceptions**
     ///
-    let object (values : (string * JsonValue) list) : JsonValue =
-        values
-        |> List.map (fun (key, value) ->
-            JProperty(key, value)
-        )
-        |> JObject :> JsonValue
+    let object (values: (string * JsonNode) list) : JsonNode =
+        let kvps =
+            values
+            |> Seq.map (fun (key, value) -> KeyValuePair(key, value))
+
+        JsonObject(kvps)
 
     ///**Description**
     /// Encode an array
@@ -126,8 +127,8 @@ module Encode =
     ///
     ///**Exceptions**
     ///
-    let array (values : JsonValue array) : JsonValue =
-        JArray(values) :> JsonValue
+    let array (values: JsonNode array) : JsonNode =
+        JsonArray(values)
 
     ///**Description**
     /// Encode a list
@@ -139,11 +140,11 @@ module Encode =
     ///
     ///**Exceptions**
     ///
-    let list (values : JsonValue list) : JsonValue =
-        JArray(values) :> JsonValue
+    let list (values: JsonNode list) : JsonNode =
+        JsonArray(Array.ofList values)
 
-    let seq (values : JsonValue seq) : JsonValue =
-        JArray(values) :> JsonValue
+    let seq (values: JsonNode seq) : JsonNode =
+        JsonArray(Array.ofSeq values)
 
     ///**Description**
     /// Encode a dictionary
@@ -155,56 +156,56 @@ module Encode =
     ///
     ///**Exceptions**
     ///
-    let dict (values : Map<string, JsonValue>) =
+    let dict (values: Map<string, JsonNode>) =
         values
         |> Map.toList
         |> object
 
-    let bigint (value : bigint) : JsonValue =
-        JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
+    let bigint (value: bigint) : JsonNode =
+        JsonValue.Create(value.ToString(CultureInfo.InvariantCulture))
 
-    let datetime (value : System.DateTime) : JsonValue =
-        JValue(value.ToString("O", CultureInfo.InvariantCulture)) :> JsonValue
+    let datetime (value : System.DateTime) : JsonNode =
+        JsonValue.Create(value.ToString("O", CultureInfo.InvariantCulture))
 
     /// The DateTime is always encoded using UTC representation
-    let datetimeOffset (value : System.DateTimeOffset) : JsonValue =
-        JValue(value.ToString("O", CultureInfo.InvariantCulture)) :> JsonValue
+    let datetimeOffset (value: System.DateTimeOffset) : JsonNode =
+        JsonValue.Create(value.ToString("O", CultureInfo.InvariantCulture))
 
-    let timespan (value : System.TimeSpan) : JsonValue =
-        JValue(value.ToString()) :> JsonValue
+    let timespan (value: System.TimeSpan) : JsonNode =
+        JsonValue.Create(value.ToString())
 
 
-    let sbyte (value : sbyte) : JsonValue =
-        JValue(box value) :> JsonValue
+    let sbyte (value: sbyte) : JsonNode =
+        JsonValue.Create(box value)
 
-    let byte (value : byte) : JsonValue =
-        JValue(box value) :> JsonValue
+    let byte (value: byte) : JsonNode =
+        JsonValue.Create(box value)
 
-    let int16 (value : int16) : JsonValue =
-        JValue(box value) :> JsonValue
+    let int16 (value: int16) : JsonNode =
+        JsonValue.Create(box value)
 
-    let uint16 (value : uint16) : JsonValue =
-        JValue(box value) :> JsonValue
+    let uint16 (value: uint16) : JsonNode =
+        JsonValue.Create(box value)
 
-    let int (value : int) : JsonValue =
-        JValue(value) :> JsonValue
+    let int (value: int) : JsonNode =
+        JsonValue.Create(value)
 
-    let uint32 (value : uint32) : JsonValue =
-        JValue(box value) :> JsonValue
+    let uint32 (value: uint32) : JsonNode =
+        JsonValue.Create(box value)
 
-    let int64 (value : int64) : JsonValue =
-        JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
+    let int64 (value: int64) : JsonNode =
+        JsonValue.Create(value.ToString(CultureInfo.InvariantCulture))
 
-    let uint64 (value : uint64) : JsonValue =
-        JValue(value.ToString(CultureInfo.InvariantCulture)) :> JsonValue
+    let uint64 (value: uint64) : JsonNode =
+        JsonValue.Create(value.ToString(CultureInfo.InvariantCulture))
 
-    let unit () : JsonValue =
-        JValue.CreateNull() :> JsonValue
+    let unit () : JsonNode =
+        JsonValue.Create(null)
 
     let tuple2
             (enc1 : Encoder<'T1>)
             (enc2 : Encoder<'T2>)
-            (v1, v2) : JsonValue =
+            (v1, v2) : JsonNode =
         [| enc1 v1
            enc2 v2 |] |> array
 
@@ -212,7 +213,7 @@ module Encode =
             (enc1 : Encoder<'T1>)
             (enc2 : Encoder<'T2>)
             (enc3 : Encoder<'T3>)
-            (v1, v2, v3) : JsonValue =
+            (v1, v2, v3) : JsonNode =
         [| enc1 v1
            enc2 v2
            enc3 v3 |] |> array
@@ -222,7 +223,7 @@ module Encode =
             (enc2 : Encoder<'T2>)
             (enc3 : Encoder<'T3>)
             (enc4 : Encoder<'T4>)
-            (v1, v2, v3, v4) : JsonValue =
+            (v1, v2, v3, v4) : JsonNode =
         [| enc1 v1
            enc2 v2
            enc3 v3
@@ -234,7 +235,7 @@ module Encode =
             (enc3 : Encoder<'T3>)
             (enc4 : Encoder<'T4>)
             (enc5 : Encoder<'T5>)
-            (v1, v2, v3, v4, v5) : JsonValue =
+            (v1, v2, v3, v4, v5) : JsonNode =
         [| enc1 v1
            enc2 v2
            enc3 v3
@@ -248,7 +249,7 @@ module Encode =
             (enc4 : Encoder<'T4>)
             (enc5 : Encoder<'T5>)
             (enc6 : Encoder<'T6>)
-            (v1, v2, v3, v4, v5, v6) : JsonValue =
+            (v1, v2, v3, v4, v5, v6) : JsonNode =
         [| enc1 v1
            enc2 v2
            enc3 v3
@@ -264,7 +265,7 @@ module Encode =
             (enc5 : Encoder<'T5>)
             (enc6 : Encoder<'T6>)
             (enc7 : Encoder<'T7>)
-            (v1, v2, v3, v4, v5, v6, v7) : JsonValue =
+            (v1, v2, v3, v4, v5, v6, v7) : JsonNode =
         [| enc1 v1
            enc2 v2
            enc3 v3
@@ -282,7 +283,7 @@ module Encode =
             (enc6 : Encoder<'T6>)
             (enc7 : Encoder<'T7>)
             (enc8 : Encoder<'T8>)
-            (v1, v2, v3, v4, v5, v6, v7, v8) : JsonValue =
+            (v1, v2, v3, v4, v5, v6, v7, v8) : JsonNode =
         [| enc1 v1
            enc2 v2
            enc3 v3
@@ -292,7 +293,7 @@ module Encode =
            enc7 v7
            enc8 v8 |] |> array
 
-    let map (keyEncoder : Encoder<'key>) (valueEncoder : Encoder<'value>) (values : Map<'key, 'value>) : JsonValue =
+    let map (keyEncoder : Encoder<'key>) (valueEncoder : Encoder<'value>) (values : Map<'key, 'value>) : JsonNode =
         values
         |> Map.toList
         |> List.map (tuple2 keyEncoder valueEncoder)
@@ -304,27 +305,27 @@ module Encode =
 
     module Enum =
 
-        let byte<'TEnum when 'TEnum : enum<byte>> (value : 'TEnum) : JsonValue =
+        let byte<'TEnum when 'TEnum : enum<byte>> (value : 'TEnum) : JsonNode =
             LanguagePrimitives.EnumToValue value
             |> byte
 
-        let sbyte<'TEnum when 'TEnum : enum<sbyte>> (value : 'TEnum) : JsonValue =
+        let sbyte<'TEnum when 'TEnum : enum<sbyte>> (value : 'TEnum) : JsonNode =
             LanguagePrimitives.EnumToValue value
             |> sbyte
 
-        let int16<'TEnum when 'TEnum : enum<int16>> (value : 'TEnum) : JsonValue =
+        let int16<'TEnum when 'TEnum : enum<int16>> (value : 'TEnum) : JsonNode =
             LanguagePrimitives.EnumToValue value
             |> int16
 
-        let uint16<'TEnum when 'TEnum : enum<uint16>> (value : 'TEnum) : JsonValue =
+        let uint16<'TEnum when 'TEnum : enum<uint16>> (value : 'TEnum) : JsonNode =
             LanguagePrimitives.EnumToValue value
             |> uint16
 
-        let int<'TEnum when 'TEnum : enum<int>> (value : 'TEnum) : JsonValue =
+        let int<'TEnum when 'TEnum : enum<int>> (value : 'TEnum) : JsonNode =
             LanguagePrimitives.EnumToValue value
             |> int
 
-        let uint32<'TEnum when 'TEnum : enum<uint32>> (value : 'TEnum) : JsonValue =
+        let uint32<'TEnum when 'TEnum : enum<uint32>> (value : 'TEnum) : JsonNode =
             LanguagePrimitives.EnumToValue value
             |> uint32
 
@@ -339,16 +340,16 @@ module Encode =
     ///
     ///**Exceptions**
     ///
-    let toString (space: int) (token: JsonValue) : string =
-        let format = if space = 0 then Formatting.None else Formatting.Indented
-        use stream = new StringWriter(NewLine = "\n")
-        use jsonWriter = new JsonTextWriter(
-                                stream,
-                                Formatting = format,
-                                Indentation = space )
+    let toString (space: int) (token: JsonNode) : string =
+        let mutable writerOptions = JsonWriterOptions()
+        writerOptions.Indented <- space > 0
+
+        use stream = new MemoryStream()
+        use jsonWriter = new Utf8JsonWriter(stream, writerOptions)
 
         token.WriteTo(jsonWriter)
-        stream.ToString()
+
+        Encoding.UTF8.GetString(stream.ToArray())
 
     //////////////////
     // Reflection ///
@@ -358,9 +359,9 @@ module Encode =
 
     type private EncoderCrate<'T>(enc: Encoder<'T>) =
         inherit BoxedEncoder()
-        override __.Encode(value: obj): JsonValue =
+        override _.Encode(value: obj): JsonNode =
             enc (unbox value)
-        member __.UnboxedEncoder = enc
+        member _.UnboxedEncoder = enc
 
     let boxEncoder (d: Encoder<'T>): BoxedEncoder =
         EncoderCrate(d) :> BoxedEncoder
@@ -387,13 +388,13 @@ module Encode =
                     |> Array.map (fun fi ->
                         let targetKey = Util.Casing.convert caseStrategy fi.Name
                         let encoder = autoEncoder extra caseStrategy skipNullField fi.PropertyType
-                        fun (source: obj) (target: JObject) ->
+                        fun (source: obj) (target: JsonNode) ->
                             let value = FSharpValue.GetRecordField(source, fi)
                             if not skipNullField || (skipNullField && not (isNull value)) then // Discard null fields
-                                target.[targetKey] <- encoder.Encode value
+                                target[targetKey] <- encoder.Encode value
                             target)
                 boxEncoder(fun (source: obj) ->
-                    (JObject(), setters) ||> Seq.fold (fun target set -> set source target) :> JsonValue)
+                    (JsonObject() :> JsonNode, setters) ||> Seq.fold (fun target set -> set source target))
             elif FSharpType.IsUnion(t, allowAccessToPrivateRepresentation=true) then
                 boxEncoder(fun (value: obj) ->
                     let info, fields = FSharpValue.GetUnionFields(value, t, allowAccessToPrivateRepresentation=true)
@@ -408,7 +409,7 @@ module Encode =
                             | _ ->
                                 match t.ConstructorArguments with
                                 | Util.Reflection.LowerFirst ->
-                                    let name = info.Name.[..0].ToLowerInvariant() + info.Name.[1..]
+                                    let name = info.Name[..0].ToLowerInvariant() + info.Name[1..]
                                     string name
                                 | Util.Reflection.Forward -> string info.Name
 
@@ -419,25 +420,25 @@ module Encode =
 
                     | len ->
                         let fieldTypes = info.GetFields()
-                        let target = Array.zeroCreate<JsonValue> (len + 1)
-                        target.[0] <- string info.Name
+                        let target = Array.zeroCreate<JsonNode> (len + 1)
+                        target[0] <- string info.Name
                         for i = 1 to len do
-                            let encoder = autoEncoder extra caseStrategy skipNullField fieldTypes.[i-1].PropertyType
-                            target.[i] <- encoder.Encode(fields.[i-1])
+                            let encoder = autoEncoder extra caseStrategy skipNullField fieldTypes[i-1].PropertyType
+                            target[i] <- encoder.Encode(fields[i-1])
                         array target)
             else
-                failwithf """Cannot generate auto encoder for %s. Please pass an extra encoder.
+                failwith $"""Cannot generate auto encoder for %s{t.FullName}. Please pass an extra encoder.
 
-Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation/auto/extra-coders.html#ready-to-use-extra-coders""" t.FullName
+Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation/auto/extra-coders.html#ready-to-use-extra-coders"""
         encoderRef.Value <- encoder
         encoder
 
     and private genericSeq (encoder: BoxedEncoder) =
         boxEncoder(fun (xs: obj) ->
-            let ar = JArray()
+            let arr = JsonArray()
             for x in xs :?> System.Collections.IEnumerable do
-                ar.Add(encoder.Encode(x))
-            ar :> JsonValue)
+                arr.Add(encoder.Encode(x))
+            arr :> JsonNode)
 
     and private autoEncoder (extra: Map<string, ref<BoxedEncoder>>) caseStrategy (skipNullField : bool) (t: System.Type) : BoxedEncoder =
       let fullname = t.FullName
@@ -453,45 +454,45 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
                     |> Array.map (autoEncoder extra caseStrategy skipNullField)
                 boxEncoder(fun (value: obj) ->
                     FSharpValue.GetTupleFields(value)
-                    |> Seq.mapi (fun i x -> encoders.[i].Encode x) |> seq)
+                    |> Seq.mapi (fun i x -> encoders[i].Encode x) |> seq)
             else
                 let fullname = t.GetGenericTypeDefinition().FullName
                 if fullname = typedefof<obj option>.FullName then
                     // Evaluate lazily so we don't need to generate the encoder for null values
-                    let encoder = lazy autoEncoder extra caseStrategy skipNullField t.GenericTypeArguments.[0]
+                    let encoder = lazy autoEncoder extra caseStrategy skipNullField t.GenericTypeArguments[0]
                     boxEncoder(fun (value: obj) ->
                         if isNull value then nil
                         else
                             let _, fields = FSharpValue.GetUnionFields(value, t, allowAccessToPrivateRepresentation=true)
-                            encoder.Value.Encode fields.[0])
+                            encoder.Value.Encode fields[0])
                 elif fullname = typedefof<obj list>.FullName
                     || fullname = typedefof<Set<string>>.FullName then
                     // I don't know how to support seq for now.
                     // || fullname = typedefof<obj seq>.FullName
-                    t.GenericTypeArguments.[0] |> autoEncoder extra caseStrategy skipNullField |> genericSeq
+                    t.GenericTypeArguments[0] |> autoEncoder extra caseStrategy skipNullField |> genericSeq
                 elif fullname = typedefof< Map<string, obj> >.FullName then
-                    let keyType = t.GenericTypeArguments.[0]
-                    let valueType = t.GenericTypeArguments.[1]
+                    let keyType = t.GenericTypeArguments[0]
+                    let valueType = t.GenericTypeArguments[1]
                     let valueEncoder = valueType |> autoEncoder extra caseStrategy skipNullField
                     let kvProps = typedefof<KeyValuePair<obj,obj>>.MakeGenericType(keyType, valueType).GetProperties()
                     match keyType with
                     | StringifiableType toString ->
                         boxEncoder(fun (value: obj) ->
-                            let target = JObject()
+                            let target = JsonObject()
                             for kv in value :?> System.Collections.IEnumerable do
-                                let k = kvProps.[0].GetValue(kv)
-                                let v = kvProps.[1].GetValue(kv)
-                                target.[toString k] <- valueEncoder.Encode v
-                            target :> JsonValue)
+                                let k = kvProps[0].GetValue(kv)
+                                let v = kvProps[1].GetValue(kv)
+                                target[toString k] <- valueEncoder.Encode v
+                            target :> JsonNode)
                     | _ ->
                         let keyEncoder = keyType |> autoEncoder extra caseStrategy skipNullField
                         boxEncoder(fun (value: obj) ->
-                            let target = JArray()
+                            let target = JsonArray()
                             for kv in value :?> System.Collections.IEnumerable do
-                                let k = kvProps.[0].GetValue(kv)
-                                let v = kvProps.[1].GetValue(kv)
-                                target.Add(JArray [|keyEncoder.Encode k; valueEncoder.Encode v|])
-                            target :> JsonValue)
+                                let k = kvProps[0].GetValue(kv)
+                                let v = kvProps[1].GetValue(kv)
+                                target.Add(JsonArray([|keyEncoder.Encode k; valueEncoder.Encode v|]))
+                            target :> JsonNode)
                 else
                     autoEncodeRecordsAndUnions extra caseStrategy skipNullField t
         elif t.IsEnum then
@@ -509,9 +510,9 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
             elif enumType = typeof<uint32>.FullName then
                 boxEncoder uint32
             else
-                failwithf
-                    """Cannot generate auto encoder for %s.
-Thoth.Json.Net only support the folluwing enum types:
+                failwith
+                    $"""Cannot generate auto encoder for %s{t.FullName}.
+Thoth.Json.Net only support the following enum types:
 - sbyte
 - byte
 - int16
@@ -519,7 +520,7 @@ Thoth.Json.Net only support the folluwing enum types:
 - int
 - uint32
 If you can't use one of these types, please pass an extra encoder.
-                    """ t.FullName
+                    """
         else
             if fullname = typeof<bool>.FullName then
                 boxEncoder bool
@@ -545,17 +546,6 @@ If you can't use one of these types, please pass an extra encoder.
                 boxEncoder float
             elif fullname = typeof<float32>.FullName then
                 boxEncoder float32
-            // These number types require extra libraries in Fable. To prevent penalizing
-            // all users, extra encoders (withInt64, etc) must be passed when they're needed.
-
-            // elif fullname = typeof<int64>.FullName then
-            //     boxEncoder int64
-            // elif fullname = typeof<uint64>.FullName then
-            //     boxEncoder uint64
-            // elif fullname = typeof<bigint>.FullName then
-            //     boxEncoder bigint
-            // elif fullname = typeof<decimal>.FullName then
-            //     boxEncoder decimal
             elif fullname = typeof<System.DateTime>.FullName then
                 boxEncoder datetime
             elif fullname = typeof<System.DateTimeOffset>.FullName then
@@ -565,7 +555,7 @@ If you can't use one of these types, please pass an extra encoder.
             elif fullname = typeof<System.Guid>.FullName then
                 boxEncoder guid
             elif fullname = typeof<obj>.FullName then
-                boxEncoder(fun (v: obj) -> JValue(v) :> JsonValue)
+                boxEncoder(fun (v: obj) -> JsonValue.Create(v) :> JsonNode)
             else
                 autoEncodeRecordsAndUnions extra caseStrategy skipNullField t
 
@@ -628,7 +618,7 @@ If you can't use one of these types, please pass an extra encoder.
     ///**Exceptions**
     ///
     [<System.Obsolete("Please use toString instead")>]
-    let encode (space: int) (token: JsonValue) : string = toString space token
+    let encode (space: int) (token: JsonNode) : string = toString space token
 
     ///**Description**
     /// Encode an option
@@ -640,5 +630,5 @@ If you can't use one of these types, please pass an extra encoder.
     ///
     ///**Exceptions**
     ///
-    let option (encoder : 'a -> JsonValue) =
+    let option (encoder : 'a -> JsonNode) =
         Option.map encoder >> Option.defaultWith (fun _ -> nil)

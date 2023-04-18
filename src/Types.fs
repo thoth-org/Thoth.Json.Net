@@ -1,16 +1,16 @@
 namespace Thoth.Json.Net
 
+open System.Text.Json.Nodes
 open System.Text.RegularExpressions
-
-type JsonValue = Newtonsoft.Json.Linq.JToken
+open System.Text.Json
 
 type ErrorReason =
-    | BadPrimitive of string * JsonValue
-    | BadPrimitiveExtra of string * JsonValue * string
-    | BadType of string * JsonValue
-    | BadField of string * JsonValue
-    | BadPath of string * JsonValue * string
-    | TooSmallArray of string * JsonValue
+    | BadPrimitive of string * JsonElement
+    | BadPrimitiveExtra of string * JsonElement * string
+    | BadType of string * JsonElement
+    | BadField of string * JsonElement
+    | BadPath of string * JsonElement * string
+    | TooSmallArray of string * JsonElement
     | FailMessage of string
     | BadOneOf of string list
 
@@ -21,19 +21,19 @@ type CaseStrategy =
 
 type DecoderError = string * ErrorReason
 
-type Decoder<'T> = string -> JsonValue -> Result<'T, DecoderError>
+type Decoder<'T> = string -> JsonElement -> Result<'T, DecoderError>
 
-type Encoder<'T> = 'T -> JsonValue
+type Encoder<'T> = 'T -> JsonNode
 
 [<AbstractClass>]
 type BoxedDecoder() =
-    abstract Decode: path : string * token: JsonValue -> Result<obj, DecoderError>
+    abstract Decode: path : string * token: JsonElement -> Result<obj, DecoderError>
     member this.BoxedDecoder: Decoder<obj> =
         fun path token -> this.Decode(path, token)
 
 [<AbstractClass>]
 type BoxedEncoder() =
-    abstract Encode: value: obj -> JsonValue
+    abstract Encode: value: obj -> JsonNode
     member this.BoxedEncoder: Encoder<obj> = this.Encode
 
 type ExtraCoders =
@@ -41,7 +41,6 @@ type ExtraCoders =
       Coders: Map<string, BoxedEncoder * BoxedDecoder> }
 
 module internal Cache =
-    open System
     open System.Collections.Concurrent
 
     type Cache<'Value>() =
@@ -55,7 +54,7 @@ module internal Cache =
 module internal Util =
 
     module Casing =
-        let lowerFirst (str : string) = str.[..0].ToLowerInvariant() + str.[1..]
+        let lowerFirst (str: string) = str[..0].ToLowerInvariant() + str[1..]
         let convert caseStrategy fieldName =
             match caseStrategy with
             | CamelCase -> lowerFirst fieldName

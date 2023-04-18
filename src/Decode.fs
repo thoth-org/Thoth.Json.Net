@@ -1,59 +1,52 @@
 namespace Thoth.Json.Net
 
+open System
+open System.Text
+open System.Text.Json
+open System.Globalization
+open System.IO
+
 [<RequireQualifiedAccess>]
 module Decode =
-
-    open System.Globalization
-    open Newtonsoft.Json
-    open Newtonsoft.Json.Linq
-    open System.IO
-
     module Helpers =
-        let anyToString (token: JsonValue) : string =
-            if isNull token then "null"
-            else
-                use stream = new StringWriter(NewLine = "\n")
-                use jsonWriter = new JsonTextWriter(
-                                        stream,
-                                        Formatting = Formatting.Indented,
-                                        Indentation = 4 )
+        let anyToString (token: JsonElement) : string =
+            let mutable jsonWriterOptions = JsonWriterOptions()
+            jsonWriterOptions.Indented <- true
 
-                token.WriteTo(jsonWriter)
-                stream.ToString()
+            use stream = new MemoryStream()
+            use jsonWriter = new Utf8JsonWriter(stream, jsonWriterOptions)
 
-        let inline getField (fieldName: string) (token: JsonValue) = token.Item(fieldName)
-        let inline isBool (token: JsonValue) = not(isNull token) && token.Type = JTokenType.Boolean
-        let inline isNumber (token: JsonValue) = not(isNull token) && (token.Type = JTokenType.Float || token.Type = JTokenType.Integer)
-        let inline isIntegralValue (token: JsonValue) = not(isNull token) && (token.Type = JTokenType.Integer)
-        let inline isInteger (token: JsonValue) = not(isNull token) && (token.Type = JTokenType.Integer)
-        let inline isString (token: JsonValue) = not(isNull token) && token.Type = JTokenType.String
-        let inline isGuid (token: JsonValue) = not(isNull token) && token.Type = JTokenType.Guid
-        let inline isDate (token: JsonValue) = not(isNull token) && token.Type = JTokenType.Date
-        let inline isArray (token: JsonValue) = not(isNull token) && token.Type = JTokenType.Array
-        let inline isObject (token: JsonValue) = not(isNull token) && token.Type = JTokenType.Object
-        let inline isUndefined (token: JsonValue) = isNull token
-        let inline isNullValue (token: JsonValue) = isNull token || token.Type = JTokenType.Null
-        let inline asBool (token: JsonValue): bool = token.Value<bool>()
-        let inline asInt (token: JsonValue): int = token.Value<int>()
-        let inline asFloat (token: JsonValue): float = token.Value<float>()
-        let inline asFloat32 (token: JsonValue): float32 = token.Value<float32>()
-        let inline asDecimal (token: JsonValue): System.Decimal = token.Value<System.Decimal>()
-        let inline asString (token: JsonValue): string = token.Value<string>()
-        let inline asArray (token: JsonValue): JsonValue[] = token.Value<JArray>().Values() |> Seq.toArray
+            token.WriteTo(jsonWriter)
+
+            Encoding.UTF8.GetString(stream.ToArray())
+
+        let inline getField (fieldName: string) (token: JsonElement) =
+            match token.TryGetProperty fieldName with
+            | true, field -> Some field
+            | _ -> None
+        let inline isBool (token: JsonElement) = token.ValueKind = JsonValueKind.True || token.ValueKind = JsonValueKind.False
+        let inline isNumber (token: JsonElement) = token.ValueKind = JsonValueKind.Number
+        let inline isString (token: JsonElement) = token.ValueKind = JsonValueKind.String
+        let inline isArray (token: JsonElement) = token.ValueKind = JsonValueKind.Array
+        let inline arrayToSeq (token: JsonElement) = seq { for elem in token.EnumerateArray() -> elem }
+        let inline isObject (token: JsonElement) = token.ValueKind = JsonValueKind.Object
+        let inline objToSeq (token: JsonElement) = seq { for prop in token.EnumerateObject() -> prop }
+        let inline isUndefined (token: JsonElement) = token.ValueKind = JsonValueKind.Undefined
+        let inline isNullValue (token: JsonElement) = token.ValueKind = JsonValueKind.Null
+        let inline asBool (token: JsonElement): bool = token.GetBoolean()
+        let inline asInt (token: JsonElement): int = token.GetInt32()
+        let inline asInt64 (token: JsonElement): int64 = token.GetInt64()
+        let inline asFloat (token: JsonElement): float = token.GetDouble()
+        let inline asFloat32 (token: JsonElement): float32 = token.GetSingle()
+        let inline asDecimal (token: JsonElement): Decimal = token.GetDecimal()
+        let inline asString (token: JsonElement): string = token.GetString()
 
     let private genericMsg msg value newLine =
         try
-            "Expecting "
-                + msg
-                + " but instead got:"
-                + (if newLine then "\n" else " ")
-                + (Helpers.anyToString value)
+            $"""Expecting {msg} but instead got:{if newLine then "\n" else " "}{Helpers.anyToString value}"""
         with
             | _ ->
-                "Expecting "
-                + msg
-                + " but decoder failed. Couldn't report given value due to circular structure."
-                + (if newLine then "\n" else " ")
+                $"""Expecting {msg} but decoder failed. Couldn't report given value due to circular structure.{if newLine then "\n" else " "}"""
 
     let private errorToString (path : string, error) =
         let reason =
@@ -122,20 +115,10 @@ module Decode =
     /// Returns <c>Ok</c> if the decoder succeeds, otherwise <c>Error</c> with the error message.
     /// </returns>
     let fromString (decoder : Decoder<'T>) =
-        fun value ->
+        fun (value: string) ->
             try
-                let serializationSettings =
-                    new JsonSerializerSettings(
-                        DateParseHandling = DateParseHandling.None,
-                        CheckAdditionalContent = true
-                    )
-
-                let serializer = JsonSerializer.Create(serializationSettings)
-
-                use reader = new JsonTextReader(new StringReader(value))
-                let res = serializer.Deserialize<JToken>(reader)
-
-                fromValue "$" decoder res
+                let rootJsonElement = JsonDocument.Parse(value).RootElement
+                fromValue "$" decoder rootJsonElement
             with
                 | :? JsonException as ex ->
                     Error("Given an invalid JSON: " + ex.Message)
@@ -154,12 +137,6 @@ module Decode =
             | Ok x -> x
             | Error msg -> failwith msg
 
-    [<System.Obsolete("Please use fromValue instead")>]
-    let decodeValue (path : string) (decoder : Decoder<'T>) = fromValue path decoder
-
-    [<System.Obsolete("Please use fromString instead")>]
-    let decodeString (decoder : Decoder<'T>) = fromString decoder
-
     //////////////////
     // Primitives ///
     ////////////////
@@ -167,226 +144,213 @@ module Decode =
     let string : Decoder<string> =
         fun path token ->
             if Helpers.isString token then
-                Ok(Helpers.asString token)
+                Ok <| Helpers.asString token
             else
-                (path, BadPrimitive("a string", token)) |> Error
+                Error (path, BadPrimitive("a string", token))
 
     let char : Decoder<char> =
         fun path value ->
             if Helpers.isString value then
                 let str = Helpers.asString value
                 if str.Length = 1 then
-                    Ok(str.[0])
+                    Ok str[0]
                 else
-                    (path, BadPrimitive("a single character string", value)) |> Error
+                    Error (path, BadPrimitive("a single-character string", value))
             else
-                (path, BadPrimitive("a char", value)) |> Error
+                Error (path, BadPrimitive("a char", value))
 
-    let guid : Decoder<System.Guid> =
+    let guid : Decoder<Guid> =
         fun path value ->
-            // Using Helpers.isString fails because Json.NET directly assigns Guid type
-            if Helpers.isGuid value then
-                value.Value<System.Guid>() |> Ok
-            elif Helpers.isString value then
-                match System.Guid.TryParse (Helpers.asString value) with
-                | true, x -> Ok x
-                | _ -> (path, BadPrimitive("a guid", value)) |> Error
-            else (path, BadPrimitive("a guid", value)) |> Error
+            if Helpers.isString value then
+                match value.TryGetGuid() with
+                | true, guid -> Ok guid
+                | _ -> Error (path, BadPrimitive("a guid", value))
+            else
+                Error (path, BadPrimitive("a guid", value))
 
     let unit : Decoder<unit> =
         fun path value ->
             if Helpers.isNullValue value then
                 Ok ()
             else
-                (path, BadPrimitive("null", value)) |> Error
+                Error (path, BadPrimitive("null", value))
 
     let inline private integral
                     (name : string)
-                    (tryParse : (string -> bool * 'T))
-                    (min : unit -> 'T)
-                    (max : unit -> 'T)
-                    (conv : float -> 'T) : Decoder< 'T > =
-
+                    (tryGet: JsonElement -> 'T option)
+                    (tryParse : string -> bool * 'T) : Decoder<'T> =
         fun path value ->
             if Helpers.isNumber value then
-                if Helpers.isIntegralValue value then
-                    let fValue = Helpers.asFloat value
-                    if (float(min())) <= fValue && fValue <= (float(max())) then
-                        Ok(conv fValue)
-                    else
-                        (path, BadPrimitiveExtra(name, value, "Value was either too large or too small for " + name)) |> Error
-                else
-                    (path, BadPrimitiveExtra(name, value, "Value is not an integral value")) |> Error
+                match tryGet value with
+                | Some got -> Ok got
+                | None -> Error (path, BadPrimitive(name, value))
             elif Helpers.isString value then
                 match tryParse (Helpers.asString value) with
-                | true, x -> Ok x
+                | true, parsed -> Ok parsed
                 | _ -> (path, BadPrimitive(name, value)) |> Error
             else
-                (path, BadPrimitive(name, value)) |> Error
+                Error (path, BadPrimitive(name, value))
 
     let sbyte : Decoder<sbyte> =
         integral
-            "a sbyte"
-            System.SByte.TryParse
-            (fun () -> System.SByte.MinValue)
-            (fun () -> System.SByte.MaxValue)
-            sbyte
+            "an sbyte"
+            (fun jEl ->
+                jEl.TryGetSByte()
+                |> function
+                    | true, sbyte -> Some sbyte
+                    | _ -> None)
+            SByte.TryParse
 
     /// Alias to Decode.uint8
     let byte : Decoder<byte> =
         integral
             "a byte"
-            System.Byte.TryParse
-            (fun () -> System.Byte.MinValue)
-            (fun () -> System.Byte.MaxValue)
-            byte
+            (fun jEl ->
+                jEl.TryGetByte()
+                |> function
+                    | true, byte -> Some byte
+                    | _ -> None)
+            Byte.TryParse
 
     let int16 : Decoder<int16> =
         integral
             "an int16"
-            System.Int16.TryParse
-            (fun () -> System.Int16.MinValue)
-            (fun () -> System.Int16.MaxValue)
-            int16
+            (fun jEl ->
+                jEl.TryGetInt16()
+                |> function
+                    | true, int16 -> Some int16
+                    | _ -> None)
+            Int16.TryParse
 
     let uint16 : Decoder<uint16> =
         integral
-            "an uint16"
-            System.UInt16.TryParse
-            (fun () -> System.UInt16.MinValue)
-            (fun () -> System.UInt16.MaxValue)
-            uint16
+            "a uint16"
+            (fun jEl ->
+                jEl.TryGetUInt16()
+                |> function
+                    | true, uint16 -> Some uint16
+                    | _ -> None)
+            UInt16.TryParse
 
     let int : Decoder<int> =
         integral
             "an int"
-            System.Int32.TryParse
-            (fun () -> System.Int32.MinValue)
-            (fun () -> System.Int32.MaxValue)
-            int
+            (fun jEl ->
+                jEl.TryGetInt32()
+                |> function
+                    | true, int32 -> Some int32
+                    | _ -> None)
+            Int32.TryParse
 
     let uint32 : Decoder<uint32> =
         integral
-            "an uint32"
-            System.UInt32.TryParse
-            (fun () -> System.UInt32.MinValue)
-            (fun () -> System.UInt32.MaxValue)
-            uint32
+            "a uint32"
+            (fun jEl ->
+                jEl.TryGetUInt32()
+                |> function
+                    | true, uint32 -> Some uint32
+                    | _ -> None)
+            UInt32.TryParse
 
     let int64 : Decoder<int64> =
         integral
             "an int64"
-            System.Int64.TryParse
-            (fun () -> System.Int64.MinValue)
-            (fun () -> System.Int64.MaxValue)
-            int64
+            (fun jEl ->
+                jEl.TryGetInt64()
+                |> function
+                    | true, int64 -> Some int64
+                    | _ -> None)
+            Int64.TryParse
 
     let uint64 : Decoder<uint64> =
         integral
-            "an uint64"
-            System.UInt64.TryParse
-            (fun () -> System.UInt64.MinValue)
-            (fun () -> System.UInt64.MaxValue)
-            uint64
+            "a uint64"
+            (fun jEl ->
+                jEl.TryGetUInt64()
+                |> function
+                    | true, uint64 -> Some uint64
+                    | _ -> None)
+            UInt64.TryParse
 
     let bigint : Decoder<bigint> =
         fun path token ->
             if Helpers.isNumber token then
-                Helpers.asInt token |> bigint |> Ok
+                Ok <| (Helpers.asInt token |> bigint)
             elif Helpers.isString token then
                 match bigint.TryParse (Helpers.asString token, NumberStyles.Any, CultureInfo.InvariantCulture) with
-                | true, x -> Ok x
-                | _ -> (path, BadPrimitive("a bigint", token)) |> Error
+                | true, bigint -> Ok bigint
+                | _ -> Error (path, BadPrimitive("a bigint", token))
             else
-                (path, BadPrimitive("a bigint", token)) |> Error
+                Error (path, BadPrimitive("a bigint", token))
 
     let bool : Decoder<bool> =
         fun path token ->
             if Helpers.isBool token then
-                Ok(Helpers.asBool token)
+                Ok <| Helpers.asBool token
             else
-                (path, BadPrimitive("a boolean", token)) |> Error
+                Error (path, BadPrimitive("a boolean", token))
 
     let float : Decoder<float> =
         fun path token ->
             if Helpers.isNumber token then
-                Helpers.asFloat token |> Ok
+                Ok <| Helpers.asFloat token
             else
                 (path, BadPrimitive("a float", token)) |> Error
 
     let float32 : Decoder<float32> =
         fun path token ->
             if Helpers.isNumber token then
-                Helpers.asFloat32 token |> Ok
+                Ok <| Helpers.asFloat32 token
             else
-                (path, BadPrimitive("a float", token)) |> Error
+                Error (path, BadPrimitive("a float", token))
 
     let decimal : Decoder<decimal> =
         fun path token ->
             if Helpers.isNumber token then
-                Helpers.asDecimal token |> Ok
+                Ok <| Helpers.asDecimal token
             elif Helpers.isString token then
-                match System.Decimal.TryParse (Helpers.asString token, NumberStyles.Any, CultureInfo.InvariantCulture) with
-                | true, x -> Ok x
-                | _ -> (path, BadPrimitive("a decimal", token)) |> Error
+                match Decimal.TryParse (Helpers.asString token, NumberStyles.Any, CultureInfo.InvariantCulture) with
+                | true, parsed -> Ok parsed
+                | _ -> Error (path, BadPrimitive("a decimal", token))
             else
-                (path, BadPrimitive("a decimal", token)) |> Error
+                Error (path, BadPrimitive("a decimal", token))
 
-    [<System.Obsolete("Please use datetimeUtc instead.")>]
-    let datetime : Decoder<System.DateTime> =
+    let datetimeUtc : Decoder<DateTime> =
         fun path token ->
-            if Helpers.isDate token then
-                token.Value<System.DateTime>().ToUniversalTime() |> Ok
-            elif Helpers.isString token then
-                match System.DateTime.TryParse (Helpers.asString token, CultureInfo.InvariantCulture, DateTimeStyles.None) with
-                | true, x -> x.ToUniversalTime() |> Ok
-                | _ -> (path, BadPrimitive("a datetime", token)) |> Error
+            if Helpers.isString token then
+                match token.TryGetDateTime() with
+                | true, dateTime -> Ok <| dateTime.ToUniversalTime()
+                | _ -> Error (path, BadPrimitive("a datetime", token))
             else
-                (path, BadPrimitive("a datetime", token)) |> Error
-
-    /// Decode a System.DateTime value using Sytem.DateTime.TryParse, then convert it to UTC.
-    let datetimeUtc : Decoder<System.DateTime> =
-        fun path token ->
-            if Helpers.isDate token then
-                token.Value<System.DateTime>().ToUniversalTime() |> Ok
-            else if Helpers.isString token then
-                match System.DateTime.TryParse (Helpers.asString token) with
-                | true, x -> x.ToUniversalTime() |> Ok
-                | _ -> (path, BadPrimitive("a datetime", token)) |> Error
-            else
-                (path, BadPrimitive("a datetime", token)) |> Error
+                Error (path, BadPrimitive("a datetime", token))
 
     /// Decode a System.DateTime with DateTime.TryParse; uses default System.DateTimeStyles.
-    let datetimeLocal : Decoder<System.DateTime> =
+    let datetimeLocal : Decoder<DateTime> =
         fun path token ->
-            if Helpers.isDate token then
-                token.Value<System.DateTime>() |> Ok
-            else if Helpers.isString token then
-                match System.DateTime.TryParse (Helpers.asString token) with
-                | true, x -> x |> Ok
-                | _ -> (path, BadPrimitive("a datetime", token)) |> Error
+            if Helpers.isString token then
+                match token.TryGetDateTime() with
+                | true, dateTime -> Ok dateTime
+                | _ -> Error (path, BadPrimitive("a datetime", token))
             else
-                (path, BadPrimitive("a datetime", token)) |> Error
+                Error (path, BadPrimitive("a datetime", token))
 
-    let datetimeOffset : Decoder<System.DateTimeOffset> =
+    let datetimeOffset : Decoder<DateTimeOffset> =
         fun path token ->
-            if Helpers.isDate token then
-                token.Value<System.DateTime>() |> System.DateTimeOffset |> Ok
-            elif Helpers.isString token then
-                match System.DateTimeOffset.TryParse (Helpers.asString token, CultureInfo.InvariantCulture, DateTimeStyles.None) with
-                | true, x -> Ok x
-                | _ -> (path, BadPrimitive("a datetimeoffset", token)) |> Error
+            if Helpers.isString token then
+                match token.TryGetDateTimeOffset() with
+                | true, dateTimeOffset -> Ok dateTimeOffset
+                | _ -> Error (path, BadPrimitive("a datetimeoffset", token))
             else
-                (path, BadPrimitive("a datetimeoffset", token)) |> Error
+                Error (path, BadPrimitive("a datetimeoffset", token))
 
-    let timespan : Decoder<System.TimeSpan> =
+    let timespan : Decoder<TimeSpan> =
         fun path token ->
-            if token.Type = JTokenType.TimeSpan || token.Type = JTokenType.String then
-                match System.TimeSpan.TryParse (Helpers.asString token, CultureInfo.InvariantCulture) with
-                | true, x -> Ok x
-                | _ -> (path, BadPrimitive("a timespan", token)) |> Error
+            if Helpers.isString token then
+                match TimeSpan.TryParse (Helpers.asString token, CultureInfo.InvariantCulture) with
+                | true, timeSpan -> Ok timeSpan
+                | _ -> Error (path, BadPrimitive("a timespan", token))
             else
-                (path, BadPrimitive("a timespan", token)) |> Error
+                Error(path, BadPrimitive("a timespan", token))
 
     /////////////////////////
     // Object primitives ///
@@ -402,54 +366,68 @@ module Decode =
             Ok None
         else
             match decoder path value with
-            | Ok v -> Ok(Some v)
-            | Error er -> Error er
+            | Ok v -> Ok <| Some v
+            | Error err -> Error err
 
-    let optional (fieldName : string) (decoder : Decoder<'value>) : Decoder<'value option> =
+    let optional (fieldName: string) (decoder: Decoder<'value>) : Decoder<'value option> =
         fun path value ->
             if Helpers.isObject value then
-                let fieldValue = Helpers.getField fieldName value
-                if Helpers.isUndefined fieldValue then Ok None
-                else decodeMaybeNull (path + "." + fieldName) decoder fieldValue
+                match Helpers.getField fieldName value with
+                | Some field ->
+                    if Helpers.isUndefined field then
+                        Ok None
+                    else
+                        decodeMaybeNull $"{path}.{fieldName}" decoder field
+                | None -> Ok None
             else
                 Error(path, BadType("an object", value))
 
     let private badPathError fieldNames currentPath value =
         let currentPath = defaultArg currentPath ("$"::fieldNames |> String.concat ".")
-        let msg = "an object with path `" + (String.concat "." fieldNames) + "`"
-        Error(currentPath, BadPath (msg, value, List.tryLast fieldNames |> Option.defaultValue ""))
+        let msg = $"""an object with path `{String.concat "." fieldNames}`"""
+        Error (currentPath, BadPath (msg, value, List.tryLast fieldNames |> Option.defaultValue ""))
 
-    let optionalAt (fieldNames : string list) (decoder : Decoder<'value>) : Decoder<'value option> =
+    let optionalAt (fieldNames: string list) (decoder: Decoder<'value>) : Decoder<'value option> =
         fun firstPath firstValue ->
             ((firstPath, firstValue, None), fieldNames)
-            ||> List.fold (fun (curPath, curValue, res) field ->
-                match res with
-                | Some _ -> curPath, curValue, res
+            ||> List.fold (fun (curPath, curValue, result) field ->
+                match result with
+                | Some _ -> curPath, curValue, result
                 | None ->
                     if Helpers.isNullValue curValue then
-                        curPath, curValue, Some (Ok None)
+                        curPath, curValue, Some <| Ok None
                     elif Helpers.isObject curValue then
-                        let curValue = Helpers.getField field curValue
-                        curPath + "." + field, curValue, None
+                        let maybeNextValue = Helpers.getField field curValue
+
+                        match maybeNextValue with
+                        | Some nextValue ->
+                            $"{curPath}.{field}", nextValue, None
+                        | None ->
+                            curPath, curValue, Some <| Ok None
                     else
-                        let res = Error(curPath, BadType("an object", curValue))
+                        let res = Error (curPath, BadType("an object", curValue))
                         curPath, curValue, Some res)
             |> function
-                | _, _, Some res -> res
+                | _, _, Some result -> result
                 | lastPath, lastValue, None ->
-                    if Helpers.isUndefined lastValue then Ok None
-                    else decodeMaybeNull lastPath decoder lastValue
+                    if Helpers.isUndefined lastValue then
+                        Ok None
+                    else
+                        decodeMaybeNull lastPath decoder lastValue
 
     let field (fieldName: string) (decoder : Decoder<'value>) : Decoder<'value> =
         fun path value ->
             if Helpers.isObject value then
-                let fieldValue = Helpers.getField fieldName value
-                if Helpers.isUndefined fieldValue then
-                    Error(path, BadField ("an object with a field named `" + fieldName + "`", value))
-                else
-                    decoder (path + "." + fieldName) fieldValue
+                match Helpers.getField fieldName value with
+                | Some field ->
+                    if Helpers.isUndefined field then
+                        Error (path, BadField ($"an object with a field named `{fieldName}`", value))
+                    else
+                        decoder $"{path}.{fieldName}" field
+                | None ->
+                    Error (path, BadField ($"an object with a field named `{fieldName}`", value))
             else
-                Error(path, BadType("an object", value))
+                Error (path, BadType("an object", value))
 
     let at (fieldNames: string list) (decoder : Decoder<'value>) : Decoder<'value> =
         fun firstPath firstValue ->
@@ -459,17 +437,23 @@ module Decode =
                 | Some _ -> curPath, curValue, res
                 | None ->
                     if Helpers.isNullValue curValue then
-                        let res = badPathError fieldNames (Some curPath) firstValue
-                        curPath, curValue, Some res
+                        let result = badPathError fieldNames (Some curPath) firstValue
+                        curPath, curValue, Some result
                     elif Helpers.isObject curValue then
-                        let curValue = Helpers.getField field curValue
-                        if Helpers.isUndefined curValue then
-                            let res = badPathError fieldNames None firstValue
-                            curPath, curValue, Some res
-                        else
-                            curPath + "." + field, curValue, None
+                        let maybeNextValue = Helpers.getField field curValue
+
+                        match maybeNextValue with
+                        | Some nextValue ->
+                            if Helpers.isUndefined nextValue then
+                                let result = badPathError fieldNames None firstValue
+                                curPath, nextValue, Some result
+                            else
+                                curPath + "." + field, curValue, None
+                        | None ->
+                            let result = badPathError fieldNames None firstValue
+                            curPath, curValue, Some result
                     else
-                        let res = Error(curPath, BadType("an object", curValue))
+                        let res = Error (curPath, BadType("an object", curValue))
                         curPath, curValue, Some res)
             |> function
                 | _, _, Some res -> res
@@ -478,29 +462,28 @@ module Decode =
 
     let index (requestedIndex: int) (decoder : Decoder<'value>) : Decoder<'value> =
         fun path token ->
-            let currentPath = path + ".[" + (Operators.string requestedIndex) + "]"
+            let currentPath = $"{path}[{Operators.string requestedIndex}]"
+
             if Helpers.isArray token then
-                let vArray = Helpers.asArray token
-                if requestedIndex < vArray.Length then
-                    decoder currentPath (vArray.[requestedIndex])
+                let arrLength = token.GetArrayLength()
+
+                if requestedIndex < arrLength then
+                    decoder currentPath token[requestedIndex]
                 else
                     let msg =
-                        "a longer array. Need index `"
-                            + (requestedIndex.ToString())
-                            + "` but there are only `"
-                            + (vArray.Length.ToString())
-                            + "` entries"
+                        $"a longer array. Need index `{requestedIndex}` but there are only `{arrLength}` entries"
 
-                    (currentPath, TooSmallArray(msg, token))
-                    |> Error
+                    Error (currentPath, TooSmallArray(msg, token))
             else
-                (currentPath, BadPrimitive("an array", token))
-                |> Error
+                Error (currentPath, BadPrimitive("an array", token))
 
     let option (decoder : Decoder<'value>) : Decoder<'value option> =
         fun path value ->
-            if Helpers.isNullValue value then Ok None
-            else decoder path value |> Result.map Some
+            if Helpers.isNullValue value then
+                Ok None
+            else
+                decoder path value
+                |> Result.map Some
 
     //////////////////////
     // Data structure ///
@@ -510,65 +493,70 @@ module Decode =
         fun path value ->
             if Helpers.isArray value then
                 let mutable i = -1
-                let tokens = Helpers.asArray value
-                (Ok [], tokens) ||> Array.fold (fun acc value ->
+                let mutable acc = Ok []
+
+                for token in value.EnumerateArray() do
                     i <- i + 1
-                    match acc with
-                    | Error _ -> acc
-                    | Ok acc ->
-                        match decoder (path + ".[" + (i.ToString()) + "]") value with
-                        | Error er -> Error er
-                        | Ok value -> Ok (value::acc))
-                |> Result.map List.rev
+                    acc <-
+                        match acc with
+                        | Error _ -> acc
+                        | Ok acc ->
+                            match decoder $"{path}[{i}]" token with
+                            | Error err -> Error err
+                            | Ok decoded -> Ok (decoded::acc)
+
+                acc |> Result.map List.rev
             else
-                (path, BadPrimitive ("a list", value))
-                |> Error
+                Error (path, BadPrimitive ("a list", value))
 
     let array (decoder : Decoder<'value>) : Decoder<'value array> =
         fun path value ->
             if Helpers.isArray value then
                 let mutable i = -1
-                let tokens = Helpers.asArray value
-                let arr = Array.zeroCreate tokens.Length
-                (Ok arr, tokens) ||> Array.fold (fun acc value ->
+                let mutable acc = Ok(Array.zeroCreate <| value.GetArrayLength())
+
+                for token in value.EnumerateArray() do
                     i <- i + 1
-                    match acc with
-                    | Error _ -> acc
-                    | Ok acc ->
-                        match decoder (path + ".[" + (i.ToString()) + "]") value with
-                        | Error er -> Error er
-                        | Ok value -> acc.[i] <- value; Ok acc)
+                    acc <-
+                        match acc with
+                        | Error _ -> acc
+                        | Ok arr ->
+                            match decoder $"{path}[{i}]" token with
+                            | Error err -> Error err
+                            | Ok decoded ->
+                                arr[i] <- decoded
+                                Ok arr
+
+                acc
             else
-                (path, BadPrimitive ("an array", value))
-                |> Error
+                Error (path, BadPrimitive ("an array", value))
 
     let keys : Decoder<string list> =
         fun path value ->
             if Helpers.isObject value then
-                let value = value.Value<JObject>()
-                value.Properties()
-                |> Seq.map (fun prop ->
-                    prop.Name
-                )
-                |> List.ofSeq |> Ok
+                let mutable acc = []
+
+                for jsonProperty in value.EnumerateObject() do
+                    acc <- jsonProperty.Name::acc
+
+                Ok (acc |> List.rev)
             else
-                (path, BadPrimitive ("an object", value))
-                |> Error
+                Error (path, BadPrimitive ("an object", value))
 
 
     let keyValuePairs (decoder : Decoder<'value>) : Decoder<(string * 'value) list> =
         fun path value ->
             match keys path value with
-            | Ok objecKeys ->
-                (Ok [], objecKeys ) ||> Seq.fold (fun acc prop ->
+            | Ok keys ->
+                (Ok [], keys) ||> Seq.fold (fun acc key ->
                     match acc with
                     | Error _ -> acc
                     | Ok acc ->
-                        match Helpers.getField prop value |> decoder path with
+                        match Helpers.getField key value |> Option.get |> decoder path with
                         | Error er -> Error er
-                        | Ok value -> (prop, value)::acc |> Ok)
+                        | Ok value -> (key, value)::acc |> Ok)
                 |> Result.map List.rev
-            | Error e -> Error e
+            | Error err -> Error err
 
     //////////////////////////////
     // Inconsistent Structure ///
@@ -796,46 +784,53 @@ module Decode =
         | Ok v -> v
         | Error er -> errors.Add(er); Unchecked.defaultof<'T>
 
-    type Getters<'T>(path: string, v: JsonValue) =
+    type Getters<'T>(path: string, v: JsonElement) =
         let mutable errors = ResizeArray<DecoderError>()
+
         let required =
             { new IRequiredGetter with
-                member __.Field (fieldName : string) (decoder : Decoder<_>) =
+                member _.Field (fieldName : string) (decoder : Decoder<_>) =
                     unwrapWith errors path (field fieldName decoder) v
-                member __.At (fieldNames : string list) (decoder : Decoder<_>) =
+                member _.At (fieldNames : string list) (decoder : Decoder<_>) =
                     unwrapWith errors path (at fieldNames decoder) v
-                member __.Raw (decoder: Decoder<_>) =
+                member _.Raw (decoder: Decoder<_>) =
                     unwrapWith errors path decoder v }
+
         let optional =
             { new IOptionalGetter with
-                member __.Field (fieldName : string) (decoder : Decoder<_>) =
+                member _.Field (fieldName : string) (decoder : Decoder<_>) =
                     unwrapWith errors path (optional fieldName decoder) v
-                member __.At (fieldNames : string list) (decoder : Decoder<_>) =
+                member _.At (fieldNames : string list) (decoder : Decoder<_>) =
                     unwrapWith errors path (optionalAt fieldNames decoder) v
-                member __.Raw (decoder: Decoder<_>) =
+                member _.Raw (decoder: Decoder<_>) =
                     match decoder path v with
                     | Ok v -> Some v
-                    | Error((_, reason) as error) ->
+                    | Error(_, reason as error) ->
                         match reason with
-                        | BadPrimitive(_,v)
-                        | BadPrimitiveExtra(_,v,_)
-                        | BadType(_,v) ->
+                        | BadPrimitive(_, v)
+                        | BadPrimitiveExtra(_, v, _)
+                        | BadType(_, v) ->
                             if Helpers.isNullValue v then None
                             else errors.Add(error); Unchecked.defaultof<_>
                         | BadField _
                         | BadPath _ -> None
                         | TooSmallArray _
                         | FailMessage _
-                        | BadOneOf _ -> errors.Add(error); Unchecked.defaultof<_> }
-        member __.Errors: _ list = Seq.toList errors
+                        | BadOneOf _ ->
+                            errors.Add(error)
+                            Unchecked.defaultof<_> }
+
+        member _.Errors: _ list = Seq.toList errors
+
         interface IGetters with
-            member __.Required = required
-            member __.Optional = optional
+            member _.Required = required
+            member _.Optional = optional
 
     let object (builder: IGetters -> 'value) : Decoder<'value> =
         fun path v ->
             let getters = Getters(path, v)
             let result = builder getters
+
             match getters.Errors with
             | [] -> Ok result
             | fst::_ as errors ->
@@ -1068,11 +1063,11 @@ module Decode =
 
     type private DecoderCrate<'T>(dec: Decoder<'T>) =
         inherit BoxedDecoder()
-        override __.Decode(path, token) =
+        override _.Decode(path, token) =
             match dec path token with
             | Ok v -> Ok(box v)
             | Error er -> Error er
-        member __.UnboxedDecoder = dec
+        member _.UnboxedDecoder = dec
 
     let boxDecoder (d: Decoder<'T>): BoxedDecoder =
         DecoderCrate(d) :> BoxedDecoder
@@ -1080,22 +1075,26 @@ module Decode =
     let unboxDecoder<'T> (d: BoxedDecoder): Decoder<'T> =
         (d :?> DecoderCrate<'T>).UnboxedDecoder
 
-    let private autoObject (decoderInfos: (string * BoxedDecoder)[]) (path : string) (value: JsonValue) =
+    let private autoObject (decoderInfos: (string * BoxedDecoder)[]) (path : string) (value: JsonElement) =
         if not (Helpers.isObject value) then
-            (path, BadPrimitive ("an object", value)) |> Error
+            Error (path, BadPrimitive ("an object", value))
         else
             (decoderInfos, Ok []) ||> Array.foldBack (fun (name, decoder) acc ->
                 match acc with
                 | Error _ -> acc
                 | Ok result ->
                     Helpers.getField name value
-                    |> decoder.BoxedDecoder (path + "." + name)
+                    |> function
+                        | Some field ->
+                            decoder.BoxedDecoder $"{path}.{name}" field
+                        | None ->
+                            Error (path, BadField($"an object with a field named `{name}`", value))
                     |> Result.map (fun v -> v::result))
 
-    let private mixedArray offset (decoders: BoxedDecoder[]) (path: string) (values: JsonValue[]): Result<obj list, DecoderError> =
+    let private mixedArray offset (decoders: BoxedDecoder[]) (path: string) (values: JsonElement[]): Result<obj list, DecoderError> =
         let expectedLength = decoders.Length + offset
         if expectedLength <> values.Length then
-            (path, sprintf "Expected array of length %i but got %i" expectedLength values.Length
+            (path, $"Expected array of length %i{expectedLength} but got %i{values.Length}"
             |> FailMessage) |> Error
         else
             let mutable result = Ok []
@@ -1103,59 +1102,43 @@ module Decode =
                 match result with
                 | Error _ -> ()
                 | Ok acc ->
-                    let path = sprintf "%s[%i]" path i
-                    let decoder = decoders.[i - offset]
-                    let value = values.[i]
+                    let path = $"%s{path}[%i{i}]"
+                    let decoder = decoders[i - offset]
+                    let value = values[i]
                     result <- decoder.Decode(path, value) |> Result.map (fun v -> v::acc)
             result
             |> Result.map List.rev
 
     let private genericOption t (decoder: BoxedDecoder) =
         let ucis = FSharpType.GetUnionCases(t)
-        fun (path : string) (value: JsonValue) ->
+        fun (path : string) (value: JsonElement) ->
             if Helpers.isNullValue value then
-                Ok (FSharpValue.MakeUnion(ucis.[0], [||]))
+                Ok (FSharpValue.MakeUnion(ucis[0], [||]))
             else
                 decoder.Decode(path, value)
-                |> Result.map (fun value -> FSharpValue.MakeUnion(ucis.[1], [|value|]))
+                |> Result.map (fun value -> FSharpValue.MakeUnion(ucis[1], [|value|]))
 
     let private genericList t (decoder: BoxedDecoder) =
-        fun (path : string) (value: JsonValue) ->
-            if not (Helpers.isArray value) then
+        fun (path : string) (value: JsonElement) ->
+            if not <| Helpers.isArray value then
                 (path, BadPrimitive ("a list", value)) |> Error
             else
-                let values = value.Value<JArray>()
                 let ucis = FSharpType.GetUnionCases(t, allowAccessToPrivateRepresentation=true)
-                let empty = FSharpValue.MakeUnion(ucis.[0], [||], allowAccessToPrivateRepresentation=true)
-                (values, Ok empty) ||> Seq.foldBack (fun value acc ->
+                let empty = FSharpValue.MakeUnion(ucis[0], [||], allowAccessToPrivateRepresentation=true)
+
+                (Helpers.arrayToSeq value, Ok empty) ||> Seq.foldBack (fun value acc ->
                     match acc with
                     | Error _ -> acc
                     | Ok acc ->
                         match decoder.Decode(path, value) with
                         | Error er -> Error er
-                        | Ok result -> FSharpValue.MakeUnion(ucis.[1], [|result; acc|], allowAccessToPrivateRepresentation=true) |> Ok)
+                        | Ok result -> FSharpValue.MakeUnion(ucis[1], [|result; acc|], allowAccessToPrivateRepresentation=true) |> Ok)
 
-    // let private genericSeq t (decoder: BoxedDecoder) =
-    //     fun (path : string) (value: JsonValue) ->
-    //         if not (Helpers.isArray value) then
-    //             (path, BadPrimitive ("a seq", value)) |> Error
-    //         else
-    //             let values = value.Value<JArray>()
-    //             let ucis = FSharpType.GetUnionCases(t, allowAccessToPrivateRepresentation=true)
-    //             let empty = FSharpValue.MakeUnion(ucis.[0], [||], allowAccessToPrivateRepresentation=true)
-    //             (values, Ok empty) ||> Seq.foldBack (fun value acc ->
-    //                 match acc with
-    //                 | Error _ -> acc
-    //                 | Ok acc ->
-    //                     match decoder.Decode(path, value) with
-    //                     | Error er -> Error er
-    //                     | Ok result -> FSharpValue.MakeUnion(ucis.[1], [|result; acc|], allowAccessToPrivateRepresentation=true) |> Ok)
-
-    let private (|StringifiableType|_|) (t: System.Type): (string->obj) option =
+    let private (|StringifiableType|_|) (t: Type): (string->obj) option =
         let fullName = t.FullName
         if fullName = typeof<string>.FullName then
             Some box
-        elif fullName = typeof<System.Guid>.FullName then
+        elif fullName = typeof<Guid>.FullName then
             let ofString = t.GetConstructor([|typeof<string>|])
             Some(fun (v: string) -> ofString.Invoke([|v|]))
         else None
@@ -1163,46 +1146,44 @@ module Decode =
     let inline private enumDecoder<'UnderlineType when 'UnderlineType : equality>
         (decoder : Decoder<'UnderlineType>)
         (toString : 'UnderlineType -> string)
-        (t: System.Type) =
-
+        (t: Type) =
             fun path value ->
                 match decoder path value with
                 | Ok enumValue ->
-                    System.Enum.GetValues(t)
+                    Enum.GetValues(t)
                     |> Seq.cast<'UnderlineType>
                     |> Seq.contains enumValue
                     |> function
                     | true ->
-                        System.Enum.Parse(t, toString enumValue)
+                        Enum.Parse(t, toString enumValue)
                         |> Ok
                     | false ->
-                        (path, BadPrimitiveExtra(t.FullName, value, "Unkown value provided for the enum"))
+                        (path, BadPrimitiveExtra(t.FullName, value, "Unknown value provided for the enum"))
                         |> Error
                 | Error msg ->
                     Error msg
 
-    let rec private genericMap extra isCamelCase (t: System.Type) =
-
-        let keyType   = t.GenericTypeArguments.[0]
-        let valueType = t.GenericTypeArguments.[1]
+    let rec private genericMap extra isCamelCase (t: Type) =
+        let keyType   = t.GenericTypeArguments[0]
+        let valueType = t.GenericTypeArguments[1]
         let valueDecoder = autoDecoder extra isCamelCase false valueType
         let keyDecoder = autoDecoder extra isCamelCase false keyType
         let tupleType = typedefof<obj * obj>.MakeGenericType([|keyType; valueType|])
         let listType = typedefof< ResizeArray<obj> >.MakeGenericType([|tupleType|])
         let addMethod = listType.GetMethod("Add")
-        fun (path: string)  (value: JsonValue) ->
-            let empty = System.Activator.CreateInstance(listType)
+        fun (path: string)  (value: JsonElement) ->
+            let empty = Activator.CreateInstance(listType)
             let kvs =
                 if Helpers.isArray value then
-                    (Ok empty, value.Value<JArray>()) ||> Seq.fold (fun acc value ->
+                    (Ok empty, Helpers.arrayToSeq value) ||> Seq.fold (fun acc value ->
                         match acc with
                         | Error _ -> acc
                         | Ok acc ->
                             if not (Helpers.isArray value) then
                                 (path, BadPrimitive ("an array", value)) |> Error
                             else
-                                let kv = value.Value<JArray>()
-                                match keyDecoder.Decode(path + "[0]", kv.[0]), valueDecoder.Decode(path + "[1]", kv.[1]) with
+                                let kv = Helpers.arrayToSeq value
+                                match keyDecoder.Decode(path + "[0]", kv |> Seq.item 0), valueDecoder.Decode(path + "[1]", kv |> Seq.item 1) with
                                 | Error er, _ -> Error er
                                 | _, Error er -> Error er
                                 | Ok key, Ok value ->
@@ -1211,7 +1192,7 @@ module Decode =
                 else
                     match keyType with
                     | StringifiableType ofString when Helpers.isObject value ->
-                        (Ok empty, value :?> JObject |> Seq.cast<JProperty>)
+                        (Ok empty, Helpers.objToSeq value)
                         ||> Seq.fold (fun acc prop ->
                             match acc with
                             | Error _ -> acc
@@ -1223,9 +1204,9 @@ module Decode =
                                     Ok acc)
                     | _ ->
                         (path, BadPrimitive ("an array or an object", value)) |> Error
-            kvs |> Result.map (fun kvs -> System.Activator.CreateInstance(t, kvs))
+            kvs |> Result.map (fun kvs -> Activator.CreateInstance(t, kvs))
 
-    and private makeUnion extra caseStrategy (t : System.Type) (searchedName : string) (path : string) (values: JsonValue[]) =
+    and private makeUnion extra caseStrategy (t : Type) (searchedName : string) (path : string) (values: JsonElement[]) =
         let uci =
             FSharpType.GetUnionCases(t, allowAccessToPrivateRepresentation=true)
             |> Array.tryFind (fun uci ->
@@ -1239,7 +1220,7 @@ module Decode =
                     | _ ->
                         match t.ConstructorArguments with
                         | Util.Reflection.LowerFirst ->
-                            let adaptedName = uci.Name.[..0].ToLowerInvariant() + uci.Name.[1..]
+                            let adaptedName = uci.Name[..0].ToLowerInvariant() + uci.Name[1..]
                             adaptedName = searchedName
 
                         | Util.Reflection.Forward ->
@@ -1261,7 +1242,7 @@ module Decode =
                 else mixedArray 1 decoders path values
             values |> Result.map (fun values -> FSharpValue.MakeUnion(uci, List.toArray values, allowAccessToPrivateRepresentation=true))
 
-    and private autoDecodeRecordsAndUnions extra (caseStrategy : CaseStrategy) (isOptional : bool) (t: System.Type): BoxedDecoder =
+    and private autoDecodeRecordsAndUnions extra (caseStrategy : CaseStrategy) (isOptional : bool) (t: Type): BoxedDecoder =
         // Add the decoder to extra in case one of the fields is recursive
         let decoderRef = ref Unchecked.defaultof<_>
         let extra = extra |> Map.add t.FullName decoderRef
@@ -1277,13 +1258,13 @@ module Decode =
                     |> Result.map (fun xs -> FSharpValue.MakeRecord(t, List.toArray xs, allowAccessToPrivateRepresentation=true)))
 
             elif FSharpType.IsUnion(t, allowAccessToPrivateRepresentation=true) then
-                boxDecoder(fun path (value: JsonValue) ->
+                boxDecoder(fun path (value: JsonElement) ->
                     if Helpers.isString(value) then
                         let name = Helpers.asString value
                         makeUnion extra caseStrategy t name path [||]
                     elif Helpers.isArray(value) then
-                        let values = Helpers.asArray value
-                        string (path + "[0]") values.[0]
+                        let values = Helpers.arrayToSeq value |> Array.ofSeq
+                        string $"{path}[0]" values[0]
                         |> Result.bind (fun name -> makeUnion extra caseStrategy t name path values)
                     else (path, BadPrimitive("a string or array", value)) |> Error)
 
@@ -1293,15 +1274,15 @@ module Decode =
                     // See https://github.com/MangelMaxime/Thoth/pull/84#issuecomment-444837773
                     boxDecoder(fun path value -> Error(path, BadType("an extra coder for " + t.FullName, value)))
                 else
-                    failwithf """Cannot generate auto decoder for %s. Please pass an extra decoder.
+                    failwith $"""Cannot generate auto decoder for %s{t.FullName}. Please pass an extra decoder.
 
-Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation/auto/extra-coders.html#ready-to-use-extra-coders""" t.FullName
+Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation/auto/extra-coders.html#ready-to-use-extra-coders"""
 
         decoderRef.Value <- decoder
         decoder
 
 
-    and private autoDecoder (extra: Map<string, ref<BoxedDecoder>>) caseStrategy (isOptional : bool) (t: System.Type) : BoxedDecoder =
+    and private autoDecoder (extra: Map<string, ref<BoxedDecoder>>) caseStrategy (isOptional : bool) (t: Type) : BoxedDecoder =
       let fullname = t.FullName
       match Map.tryFind fullname extra with
       | Some decoderRef -> boxDecoder(fun path value -> decoderRef.contents.BoxedDecoder path value)
@@ -1312,9 +1293,9 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
             boxDecoder(fun path value ->
                 match array decoder.BoxedDecoder path value with
                 | Ok items ->
-                    let ar = System.Array.CreateInstance(elemType, items.Length)
+                    let ar = Array.CreateInstance(elemType, items.Length)
                     for i = 0 to ar.Length - 1 do
-                        ar.SetValue(items.[i], i)
+                        ar.SetValue(items[i], i)
                     Ok ar
                 | Error er -> Error er)
         elif t.IsGenericType then
@@ -1322,36 +1303,36 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
                 let decoders = FSharpType.GetTupleElements(t) |> Array.map (autoDecoder extra caseStrategy false)
                 boxDecoder(fun path value ->
                     if Helpers.isArray value then
-                        mixedArray 0 decoders path (Helpers.asArray value)
+                        mixedArray 0 decoders path (Helpers.arrayToSeq value |> Array.ofSeq)
                         |> Result.map (fun xs -> FSharpValue.MakeTuple(List.toArray xs, t))
                     else (path, BadPrimitive ("an array", value)) |> Error)
             else
                 let fullname = t.GetGenericTypeDefinition().FullName
                 if fullname = typedefof<obj option>.FullName then
-                    autoDecoder extra caseStrategy true t.GenericTypeArguments.[0] |> genericOption t |> boxDecoder
+                    autoDecoder extra caseStrategy true t.GenericTypeArguments[0] |> genericOption t |> boxDecoder
                 elif fullname = typedefof<obj list>.FullName then
-                    autoDecoder extra caseStrategy false t.GenericTypeArguments.[0] |> genericList t |> boxDecoder
+                    autoDecoder extra caseStrategy false t.GenericTypeArguments[0] |> genericList t |> boxDecoder
                 // I don't know for now how to support seq
                 // elif fullname = typedefof<obj seq>.FullName then
                 //     autoDecoder extra caseStrategy false t.GenericTypeArguments.[0] |> genericSeq t |> boxDecoder
-                elif fullname = typedefof< Map<System.IComparable, obj> >.FullName then
+                elif fullname = typedefof< Map<IComparable, obj> >.FullName then
                     genericMap extra caseStrategy t |> boxDecoder
                 elif fullname = typedefof< Set<string> >.FullName then
-                    let t = t.GenericTypeArguments.[0]
+                    let t = t.GenericTypeArguments[0]
                     let decoder = autoDecoder extra caseStrategy false t
                     boxDecoder(fun path value ->
                         match array decoder.BoxedDecoder path value with
                         | Ok items ->
-                            let ar = System.Array.CreateInstance(t, items.Length)
+                            let ar = Array.CreateInstance(t, items.Length)
                             for i = 0 to ar.Length - 1 do
-                                ar.SetValue(items.[i], i)
+                                ar.SetValue(items[i], i)
                             let setType = typedefof< Set<string> >.MakeGenericType([|t|])
-                            System.Activator.CreateInstance(setType, ar) |> Ok
+                            Activator.CreateInstance(setType, ar) |> Ok
                         | Error er -> Error er)
                 else
                     autoDecodeRecordsAndUnions extra caseStrategy isOptional t
         elif t.IsEnum then
-            let enumType = System.Enum.GetUnderlyingType(t).FullName
+            let enumType = Enum.GetUnderlyingType(t).FullName
             if enumType = typeof<sbyte>.FullName then
                 enumDecoder<sbyte> sbyte Operators.string t |> boxDecoder
             elif enumType = typeof<byte>.FullName then
@@ -1404,29 +1385,20 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
                 boxDecoder float
             elif fullname = typeof<float32>.FullName then
                 boxDecoder float32
-            // These number types require extra libraries in Fable. To prevent penalizing
-            // all users, extra decoders (withInt64, etc) must be passed when they're needed.
-
-            // elif fullname = typeof<int64>.FullName then
-            //     boxDecoder int64
-            // elif fullname = typeof<uint64>.FullName then
-            //     boxDecoder uint64
-            // elif fullname = typeof<bigint>.FullName then
-            //     boxDecoder bigint
-            // elif fullname = typeof<decimal>.FullName then
-            //     boxDecoder decimal
-            elif fullname = typeof<System.DateTime>.FullName then
+            elif fullname = typeof<DateTime>.FullName then
                 boxDecoder datetimeUtc
-            elif fullname = typeof<System.DateTimeOffset>.FullName then
+            elif fullname = typeof<DateTimeOffset>.FullName then
                 boxDecoder datetimeOffset
-            elif fullname = typeof<System.TimeSpan>.FullName then
+            elif fullname = typeof<TimeSpan>.FullName then
                 boxDecoder timespan
-            elif fullname = typeof<System.Guid>.FullName then
+            elif fullname = typeof<Guid>.FullName then
                 boxDecoder guid
             elif fullname = typeof<obj>.FullName then
                 boxDecoder (fun _ v ->
-                    if Helpers.isNullValue v then Ok(null: obj)
-                    else v.Value<obj>() |> Ok)
+                    if Helpers.isNullValue v then
+                        Ok (null: obj)
+                    else
+                        Ok <| v.Deserialize<obj>())
             else autoDecodeRecordsAndUnions extra caseStrategy isOptional t
 
     let private makeExtra (extra: ExtraCoders option) =
@@ -1440,7 +1412,7 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
         /// The goal of this API is to provide better interop when consuming Thoth.Json.Net from a C# project
         type LowLevel =
             /// ATTENTION: Use this only when other arguments (isCamelCase, extra) don't change
-            static member generateDecoderCached<'T> (t:System.Type, ?caseStrategy : CaseStrategy, ?extra: ExtraCoders): Decoder<'T> =
+            static member generateDecoderCached<'T> (t:Type, ?caseStrategy : CaseStrategy, ?extra: ExtraCoders): Decoder<'T> =
                 let caseStrategy = defaultArg caseStrategy PascalCase
 
                 let key =
@@ -1457,7 +1429,7 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
                     | Ok x -> Ok(x :?> 'T)
                     | Error er -> Error er
 
-            static member generateDecoder<'T> (t: System.Type, ?caseStrategy : CaseStrategy, ?extra: ExtraCoders): Decoder<'T> =
+            static member generateDecoder<'T> (t: Type, ?caseStrategy : CaseStrategy, ?extra: ExtraCoders): Decoder<'T> =
                 let caseStrategy = defaultArg caseStrategy PascalCase
                 let decoderCrate = autoDecoder (makeExtra extra) caseStrategy false t
                 fun path token ->
@@ -1465,7 +1437,7 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
                     | Ok x -> Ok(x :?> 'T)
                     | Error er -> Error er
 
-            static member fromString<'T>(json: string, t: System.Type, ?caseStrategy : CaseStrategy, ?extra: ExtraCoders): Result<'T, string> =
+            static member fromString<'T>(json: string, t: Type, ?caseStrategy : CaseStrategy, ?extra: ExtraCoders): Result<'T, string> =
                 let decoder = LowLevel.generateDecoder(t, ?caseStrategy=caseStrategy, ?extra=extra)
                 fromString decoder json
 
