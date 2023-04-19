@@ -2,9 +2,6 @@
 
 open Thoth.Json.Net
 open System.Threading
-#if !NETFRAMEWORK
-open Fable.Core
-#endif
 
 type Record2 =
     { a : float
@@ -281,24 +278,6 @@ type RecordWithInterface =
 type MyRecType =
     { Name: string
       Children: MyRecType List }
-
-#if !NETFRAMEWORK
-[<StringEnum>]
-type Camera =
-    | FirstPerson
-    | ArcRotate
-    | IsometricTopDown
-
-[<StringEnum(CaseRules.LowerFirst)>]
-type Framework =
-    | React
-    | VueJs
-
-[<StringEnum(CaseRules.None)>]
-type Language =
-    | Fsharp
-    | [<CompiledName("C#")>] Csharp
-#endif
 
 type Enum_Int8 =
     | Zero = 0y

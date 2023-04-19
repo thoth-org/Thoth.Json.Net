@@ -1,9 +1,5 @@
 ﻿module Tests.Decoders
 
-#if !NETFRAMEWORK
-open Fable.Core
-#endif
-
 open Thoth.Json.Net
 open Util.Testing
 open System
@@ -39,48 +35,20 @@ let tests : Test =
 
         testList "Errors" [
 
-            #if FABLE_COMPILER
-
-            testCase "circular structure are supported when reporting error" <| fun _ ->
-                let a = createObj [ ]
-                let b = createObj [ ]
-                a?child <- b
-                b?child <- a
-
-                let expected : Result<float, string> = Error "Error at: `$`\nExpecting a float but decoder failed. Couldn\'t report given value due to circular structure. "
-                let actual = Decode.fromValue "$" Decode.float b
-
-                equal expected actual
-            #endif
-
             testCase "invalid json" <| fun _ ->
-                #if FABLE_COMPILER
-                let expected : Result<float, string> = Error "Given an invalid JSON: Unexpected token m in JSON at position 0"
-                #else
-                let expected : Result<float, string> = Error "Given an invalid JSON: Unexpected character encountered while parsing value: m. Path '', line 0, position 0."
-                #endif
+                let expected : Result<float, string> = Error "Given an invalid JSON: 'm' is an invalid start of a value. LineNumber: 0 | BytePositionInLine: 0."
                 let actual = Decode.fromString Decode.float "maxime"
 
                 equal expected actual
 
             testCase "invalid json #2 - Special case for Thoth.Json.Net" <| fun _ ->
-                // See: https://github.com/thoth-org/Thoth.Json.Net/issues/42
-                #if FABLE_COMPILER
-                let expected : Result<MyUnion, string> = Error "Given an invalid JSON: Unexpected token , in JSON at position 5"
-                #else
-                let expected : Result<MyUnion, string> = Error "Given an invalid JSON: Additional text encountered after finished reading JSON content: ,. Path '', line 1, position 5."
-                #endif
+                let expected : Result<MyUnion, string> = Error "Given an invalid JSON: ',' is invalid after a single JSON value. Expected end of data. LineNumber: 0 | BytePositionInLine: 5."
                 let actual = Decode.Auto.fromString<MyUnion>(""""Foo","42"]""")
 
                 equal expected actual
 
             testCase "invalid json #3 - Special case for Thoth.Json.Net" <| fun _ ->
-                // See: https://github.com/thoth-org/Thoth.Json.Net/pull/48
-                #if FABLE_COMPILER
-                let expected : Result<float, string> = Error "Given an invalid JSON: Unexpected end of JSON input"
-                #else
-                let expected : Result<float, string> = Error "Given an invalid JSON: Unexpected end when reading token. Path 'Ab[1]'."
-                #endif
+                let expected : Result<float, string> = Error "Given an invalid JSON: Expected start of a property name or value, but instead reached end of data. LineNumber: 7 | BytePositionInLine: 16."
 
                 let incorrectJson = """
                 {
@@ -171,11 +139,12 @@ let tests : Test =
                     Error(
                         """
 Error at: `$`
-Expecting a single character string but instead got: "ab"
-                        """.Trim())
+Expecting a single-character string but instead got: "ab"
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString Decode.char "\"ab\""
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -215,7 +184,7 @@ Expecting a single character string but instead got: "ab"
                 equal expected actual
 
             testCase "an invalid int [invalid range: too big] output an error" <| fun _ ->
-                let expected = Error("Error at: `$`\nExpecting an int but instead got: 2147483648\nReason: Value was either too large or too small for an int")
+                let expected = Error("Error at: `$`\nExpecting an int but instead got: 2147483648\nReason: not an integral value or not within the allowed range of -2147483648 to 2147483647")
                 let actual =
                     Decode.fromString Decode.int "2147483648"
 
@@ -223,7 +192,7 @@ Expecting a single character string but instead got: "ab"
 
 
             testCase "an invalid int [invalid range: too small] output an error" <| fun _ ->
-                let expected = Error("Error at: `$`\nExpecting an int but instead got: -2147483649\nReason: Value was either too large or too small for an int")
+                let expected = Error("Error at: `$`\nExpecting an int but instead got: -2147483649\nReason: not an integral value or not within the allowed range of -2147483648 to 2147483647")
                 let actual =
                     Decode.fromString Decode.int "-2147483649"
 
@@ -249,10 +218,11 @@ Expecting a single character string but instead got: "ab"
                         """
 Error at: `$`
 Expecting an int16 but instead got: 32768
-Reason: Value was either too large or too small for an int16
-                        """.Trim())
+Reason: not an integral value or not within the allowed range of -32768 to 32767
+                        """ |> String.normalize)
                 let actual =
                     Decode.fromString Decode.int16 "32768"
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -262,10 +232,11 @@ Reason: Value was either too large or too small for an int16
                         """
 Error at: `$`
 Expecting an int16 but instead got: -32769
-Reason: Value was either too large or too small for an int16
-                        """.Trim())
+Reason: not an integral value or not within the allowed range of -32768 to 32767
+                        """ |> String.normalize)
                 let actual =
                     Decode.fromString Decode.int16 "-32769"
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -275,61 +246,67 @@ Reason: Value was either too large or too small for an int16
                         """
 Error at: `$`
 Expecting an int16 but instead got: "maxime"
-                        """.Trim())
+Reason: not an integral value or not within the allowed range of -32768 to 32767
+                        """ |> String.normalize)
                 let actual =
                     Decode.fromString Decode.int16 "\"maxime\""
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
-            testCase "an uint16 works from number" <| fun _ ->
+            testCase "a uint16 works from number" <| fun _ ->
                 let expected = Ok(uint16 25)
                 let actual =
                     Decode.fromString Decode.uint16 "25"
 
                 equal expected actual
 
-            testCase "an uint16 works from string" <| fun _ ->
+            testCase "a uint16 works from string" <| fun _ ->
                 let expected = Ok(uint16 25)
                 let actual =
                     Decode.fromString Decode.uint16 "\"25\""
 
                 equal expected actual
 
-            testCase "an uint16 output an error if value is too big" <| fun _ ->
+            testCase "a uint16 output an error if value is too big" <| fun _ ->
                 let expected =
                     Error(
                         """
 Error at: `$`
-Expecting an uint16 but instead got: 65536
-Reason: Value was either too large or too small for an uint16
-                        """.Trim())
+Expecting a uint16 but instead got: 65536
+Reason: not an integral value or not within the allowed range of 0 to 65535
+                        """ |> String.normalize)
                 let actual =
                     Decode.fromString Decode.uint16 "65536"
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
-            testCase "an uint16 output an error if value is too small" <| fun _ ->
+            testCase "a uint16 output an error if value is too small" <| fun _ ->
                 let expected =
                     Error(
                         """
 Error at: `$`
-Expecting an uint16 but instead got: -1
-Reason: Value was either too large or too small for an uint16
-                        """.Trim())
+Expecting a uint16 but instead got: -1
+Reason: not an integral value or not within the allowed range of 0 to 65535
+                        """ |> String.normalize)
                 let actual =
                     Decode.fromString Decode.uint16 "-1"
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
-            testCase "an uint16 output an error if incorrect string" <| fun _ ->
+            testCase "a uint16 output an error if incorrect string" <| fun _ ->
                 let expected =
                     Error(
                         """
 Error at: `$`
-Expecting an uint16 but instead got: "maxime"
-                        """.Trim())
+Expecting a uint16 but instead got: "maxime"
+Reason: not an integral value or not within the allowed range of 0 to 65535
+                        """ |> String.normalize)
                 let actual =
                     Decode.fromString Decode.uint16 "\"maxime\""
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -349,13 +326,14 @@ Expecting an uint16 but instead got: "maxime"
 
             testCase "an int64 works output an error if incorrect string" <| fun _ ->
                 let expected =
-                    Error(
-                        """
+                    Error("""
 Error at: `$`
 Expecting an int64 but instead got: "maxime"
-                        """.Trim())
+Reason: not an integral value or not within the allowed range of -9223372036854775808 to 9223372036854775807
+""" |> String.normalize)
                 let actual =
                     Decode.fromString Decode.int64 "\"maxime\""
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -378,11 +356,13 @@ Expecting an int64 but instead got: "maxime"
                     Error(
                         """
 Error at: `$`
-Expecting an uint32 but instead got: "maxime"
-                        """.Trim())
+Expecting a uint32 but instead got: "maxime"
+Reason: not an integral value or not within the allowed range of 0 to 4294967295
+""" |> String.normalize)
 
                 let actual =
                     Decode.fromString Decode.uint32 "\"maxime\""
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -393,23 +373,25 @@ Expecting an uint32 but instead got: "maxime"
 
                 equal expected actual
 
-            testCase "an uint64 works from string" <| fun _ ->
+            testCase "a uint64 works from string" <| fun _ ->
                 let expected = Ok 1000UL
                 let actual =
                     Decode.fromString Decode.uint64 "\"1000\""
 
                 equal expected actual
 
-            testCase "an uint64 output an error if incorrect string" <| fun _ ->
+            testCase "a uint64 output an error if incorrect string" <| fun _ ->
                 let expected =
                     Error(
                         """
 Error at: `$`
-Expecting an uint64 but instead got: "maxime"
-                        """.Trim())
+Expecting a uint64 but instead got: "maxime"
+Reason: not an integral value or not within the allowed range of 0 to 18446744073709551615
+""" |> String.normalize)
 
                 let actual =
                     Decode.fromString Decode.uint64 "\"maxime\""
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -433,10 +415,11 @@ Expecting an uint64 but instead got: "maxime"
                         """
 Error at: `$`
 Expecting a byte but instead got: 256
-Reason: Value was either too large or too small for a byte
-                        """.Trim())
+Reason: not an integral value or not within the allowed range of 0 to 255
+                        """ |> String.normalize)
                 let actual =
                     Decode.fromString Decode.byte "256"
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -446,10 +429,11 @@ Reason: Value was either too large or too small for a byte
                         """
 Error at: `$`
 Expecting a byte but instead got: -1
-Reason: Value was either too large or too small for a byte
-                        """.Trim())
+Reason: not an integral value or not within the allowed range of 0 to 255
+                        """ |> String.normalize)
                 let actual =
                     Decode.fromString Decode.byte "-1"
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -459,9 +443,11 @@ Reason: Value was either too large or too small for a byte
                         """
 Error at: `$`
 Expecting a byte but instead got: "maxime"
-                        """.Trim())
+Reason: not an integral value or not within the allowed range of 0 to 255
+                        """ |> String.normalize)
                 let actual =
                     Decode.fromString Decode.byte "\"maxime\""
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -485,11 +471,12 @@ Expecting a byte but instead got: "maxime"
                     Error(
                         """
 Error at: `$`
-Expecting a sbyte but instead got: 128
-Reason: Value was either too large or too small for a sbyte
-                        """.Trim())
+Expecting an sbyte but instead got: 128
+Reason: not an integral value or not within the allowed range of -128 to 127
+                        """ |> String.normalize)
                 let actual =
                     Decode.fromString Decode.sbyte "128"
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -498,11 +485,12 @@ Reason: Value was either too large or too small for a sbyte
                     Error(
                         """
 Error at: `$`
-Expecting a sbyte but instead got: -129
-Reason: Value was either too large or too small for a sbyte
-                        """.Trim())
+Expecting an sbyte but instead got: -129
+Reason: not an integral value or not within the allowed range of -128 to 127
+                        """ |> String.normalize)
                 let actual =
                     Decode.fromString Decode.sbyte "-129"
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -511,36 +499,39 @@ Reason: Value was either too large or too small for a sbyte
                     Error(
                         """
 Error at: `$`
-Expecting a sbyte but instead got: "maxime"
-                        """.Trim())
+Expecting an sbyte but instead got: "maxime"
+Reason: not an integral value or not within the allowed range of -128 to 127
+                        """ |> String.normalize)
                 let actual =
                     Decode.fromString Decode.sbyte "\"maxime\""
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
-            testCase "an bigint works from number" <| fun _ ->
+            testCase "a bigint works from number" <| fun _ ->
                 let expected = Ok 12I
                 let actual =
                     Decode.fromString Decode.bigint "12"
 
                 equal expected actual
 
-            testCase "an bigint works from string" <| fun _ ->
+            testCase "a bigint works from string" <| fun _ ->
                 let expected = Ok 12I
                 let actual =
                     Decode.fromString Decode.bigint "\"12\""
 
                 equal expected actual
 
-            testCase "an bigint output an error if invalid string" <| fun _ ->
+            testCase "a bigint output an error if invalid string" <| fun _ ->
                 let expected =
                     Error (
                         """
 Error at: `$`
 Expecting a bigint but instead got: "maxime"
-                        """.Trim())
+                        """ |> String.normalize)
                 let actual =
                     Decode.fromString Decode.bigint "\"maxime\""
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -571,10 +562,11 @@ Expecting a bigint but instead got: "maxime"
                         """
 Error at: `$`
 Expecting a datetime but instead got: "invalid_string"
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString Decode.datetimeUtc "\"invalid_string\""
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -603,10 +595,11 @@ Expecting a datetime but instead got: "invalid_string"
                         """
 Error at: `$`
 Expecting a datetimeoffset but instead got: "NOT A DATETIMEOFFSET"
-                        """.Trim())
+                        """ |> String.normalize)
                 let json = "\"NOT A DATETIMEOFFSET\""
                 let actual =
                     Decode.fromString Decode.datetimeOffset json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -625,10 +618,11 @@ Expecting a datetimeoffset but instead got: "NOT A DATETIMEOFFSET"
                         """
 Error at: `$`
 Expecting a timespan but instead got: "NOT A TimeSpan"
-                        """.Trim())
+                        """ |> String.normalize)
                 let json = "\"NOT A TimeSpan\""
                 let actual =
                     Decode.fromString Decode.timespan json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -784,15 +778,16 @@ Expecting a timespan but instead got: "NOT A TimeSpan"
                 let expected =
                     Error(
                         """
-Error at: `$.[1]`
+Error at: `$[1]`
 Expecting a string but instead got: false
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString
                         (Decode.tuple2
                             Decode.int
                             Decode.string) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -801,9 +796,9 @@ Expecting a string but instead got: false
                 let expected =
                     Error(
                         """
-Error at: `$.[2]`
+Error at: `$[2]`
 Expecting a float but instead got: false
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString
@@ -811,6 +806,7 @@ Expecting a float but instead got: false
                             Decode.int
                             Decode.string
                             Decode.float) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -819,14 +815,14 @@ Expecting a float but instead got: false
                 let expected =
                     Error(
                         """
-Error at: `$.[3]`
+Error at: `$[3]`
 Expecting a longer array. Need index `3` but there are only `3` entries.
 [
-    1,
-    "maxime",
-    2.5
+  1,
+  "maxime",
+  2.5
 ]
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString
@@ -835,6 +831,7 @@ Expecting a longer array. Need index `3` but there are only `3` entries.
                             Decode.string
                             Decode.float
                             SmallRecord.Decoder) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -843,9 +840,9 @@ Expecting a longer array. Need index `3` but there are only `3` entries.
                 let expected =
                     Error(
                         """
-Error at: `$.[3].fieldA`
+Error at: `$[3].fieldA`
 Expecting a string but instead got: false
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString
@@ -854,6 +851,7 @@ Expecting a string but instead got: false
                             Decode.string
                             Decode.float
                             SmallRecord.Decoder) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -862,9 +860,9 @@ Expecting a string but instead got: false
                 let expected =
                     Error(
                         """
-Error at: `$.[4]`
+Error at: `$[4]`
 Expecting a datetime but instead got: false
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString
@@ -874,6 +872,7 @@ Expecting a datetime but instead got: false
                             Decode.float
                             SmallRecord.Decoder
                             Decode.datetimeUtc) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -882,9 +881,9 @@ Expecting a datetime but instead got: false
                 let expected =
                     Error(
                         """
-Error at: `$.[5]`
+Error at: `$[5]`
 Expecting null but instead got: false
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString
@@ -895,6 +894,7 @@ Expecting null but instead got: false
                             SmallRecord.Decoder
                             Decode.datetimeUtc
                             (Decode.nil null)) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -903,9 +903,9 @@ Expecting null but instead got: false
                 let expected =
                     Error(
                         """
-Error at: `$.[6]`
+Error at: `$[6]`
 Expecting an int but instead got: false
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString
@@ -917,6 +917,7 @@ Expecting an int but instead got: false
                             Decode.datetimeUtc
                             (Decode.nil null)
                             Decode.int) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -925,9 +926,10 @@ Expecting an int but instead got: false
                 let expected =
                     Error(
                         """
-Error at: `$.[7]`
+Error at: `$[7]`
 Expecting an int but instead got: "maxime"
-                        """.Trim())
+Reason: not an integral value or not within the allowed range of -2147483648 to 2147483647
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString
@@ -940,6 +942,7 @@ Expecting an int but instead got: "maxime"
                             (Decode.nil null)
                             Decode.int
                             Decode.int) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -963,11 +966,12 @@ Expecting an int but instead got: "maxime"
                         """
 Error at: `$.name`
 Expecting an int but instead got: null
-                        """.Trim()
+                        """ |> String.normalize
                     )
 
                 let actual =
                     Decode.fromString (Decode.field "name" Decode.int) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -979,13 +983,14 @@ Expecting an int but instead got: null
 Error at: `$`
 Expecting an object with a field named `height` but instead got:
 {
-    "name": "maxime",
-    "age": 25
+  "name": "maxime",
+  "age": 25
 }
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString (Decode.field "height" Decode.float) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -1007,16 +1012,17 @@ Expecting an object with a field named `height` but instead got:
 Error at: `$.user.firstname`
 Expecting an object with path `user.firstname` but instead got:
 {
-    "user": {
-        "name": "maxime",
-        "age": 25
-    }
+  "user": {
+    "name": "maxime",
+    "age": 25
+  }
 }
-Node `firstname` is unkown.
-                        """.Trim())
+Node `firstname` is unknown.
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString (Decode.at ["user"; "firstname"] Decode.string) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -1027,11 +1033,12 @@ Node `firstname` is unkown.
                         """
 Error at: `$.name`
 Expecting an int but instead got: null
-                        """.Trim()
+                        """ |> String.normalize
                     )
 
                 let actual =
                     Decode.fromString (Decode.at [ "name" ] Decode.int) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -1049,17 +1056,18 @@ Expecting an int but instead got: null
                 let expected =
                     Error(
                         """
-Error at: `$.[5]`
+Error at: `$[5]`
 Expecting a longer array. Need index `5` but there are only `3` entries.
 [
-    "maxime",
-    "alfonso",
-    "steffen"
+  "maxime",
+  "alfonso",
+  "steffen"
 ]
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString (Decode.index 5 Decode.string) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -1068,12 +1076,13 @@ Expecting a longer array. Need index `5` but there are only `3` entries.
                 let expected =
                     Error(
                         """
-Error at: `$.[5]`
+Error at: `$[5]`
 Expecting an array but instead got: 1
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString (Decode.index 5 Decode.string) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -1174,21 +1183,21 @@ Expecting an array but instead got: 1
                     Decode.fromString (Decode.dict decodePoint)
                         """
 {
-    "a":
-        {
-            "a": 1.0,
-            "b": 1.0
-        },
-    "b":
-        {
-            "a": 2.0,
-            "b": 2.0
-        },
-    "c":
-        {
-            "a": 3.0,
-            "b": 3.0
-        }
+  "a":
+    {
+      "a": 1.0,
+      "b": 1.0
+    },
+  "b":
+    {
+      "a": 2.0,
+      "b": 2.0
+    },
+  "c":
+    {
+      "a": 3.0,
+      "b": 3.0
+    }
 }
                         """
 
@@ -1223,27 +1232,27 @@ Expecting an array but instead got: 1
                     Decode.fromString (Decode.map' decodePoint Decode.string)
                         """
 [
-    [
-        {
-            "x": 1,
-            "y": 6
-        },
-        "a"
-    ],
-    [
-        {
-            "x": 2,
-            "y": 7
-        },
-        "b"
-    ],
-    [
-        {
-            "x": 3,
-            "y": 8
-        },
-        "c"
-    ]
+  [
+    {
+      "x": 1,
+      "y": 6
+    },
+    "a"
+  ],
+  [
+    {
+      "x": 2,
+      "y": 7
+    },
+    "b"
+  ],
+  [
+    {
+      "x": 3,
+      "y": 8
+    },
+    "c"
+  ]
 ]
                         """
 
@@ -1302,19 +1311,20 @@ Expecting an array but instead got: 1
                         """
 The following errors were found:
 
-Error at: `$.[0]`
+Error at: `$[0]`
 Expecting a string but instead got: 1
 
-Error at: `$.[0]`
+Error at: `$[0]`
 Expecting an object but instead got:
 1
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let badInt =
                     Decode.oneOf [ Decode.string; Decode.field "test" Decode.string ]
 
                 let actual =
                     Decode.fromString (Decode.list badInt) "[1,2,null,4]"
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -1350,10 +1360,11 @@ Expecting an object but instead got:
                         """
 Error at: `$.name`
 Expecting a string but instead got: 12
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let actual =
                     Decode.fromString (Decode.optional "name" Decode.string) json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -1403,8 +1414,9 @@ Expecting a string but instead got: 12
                         """
 Error at: `$.name`
 Expecting an int but instead got: "maxime"
-                        """.Trim()
-                    equal expected msg
+Reason: not an integral value or not within the allowed range of -2147483648 to 2147483647
+                        """ |> String.normalize
+                    equal expected (msg |> String.normalize)
                 | Ok _ -> failwith "Expected type error for `name` field #1"
 
                 match Decode.fromString (Decode.field "this_field_do_not_exist" (Decode.option Decode.int)) json with
@@ -1414,12 +1426,12 @@ Expecting an int but instead got: "maxime"
 Error at: `$`
 Expecting an object with a field named `this_field_do_not_exist` but instead got:
 {
-    "name": "maxime",
-    "age": 25,
-    "something_undefined": null
+  "name": "maxime",
+  "age": 25,
+  "something_undefined": null
 }
-                        """.Trim()
-                    equal expected msg
+                        """ |> String.normalize
+                    equal expected (msg |> String.normalize)
                 | Ok _ ->
                     failwith "Expected type error for `name` field #2"
 
@@ -1441,8 +1453,9 @@ Expecting an object with a field named `this_field_do_not_exist` but instead got
                         """
 Error at: `$.name`
 Expecting an int but instead got: "maxime"
-                        """.Trim()
-                    equal expected msg
+Reason: not an integral value or not within the allowed range of -2147483648 to 2147483647
+                        """ |> String.normalize
+                    equal expected (msg |> String.normalize)
                 | Ok _ -> failwith "Expected type error for `name` field #3"
 
                 match Decode.fromString (Decode.option (Decode.field "this_field_do_not_exist" Decode.int)) json with
@@ -1452,12 +1465,12 @@ Expecting an int but instead got: "maxime"
 Error at: `$`
 Expecting an object with a field named `this_field_do_not_exist` but instead got:
 {
-    "name": "maxime",
-    "age": 25,
-    "something_undefined": null
+  "name": "maxime",
+  "age": 25,
+  "something_undefined": null
 }
-                        """.Trim()
-                    equal expected msg
+                        """ |> String.normalize
+                    equal expected (msg |> String.normalize)
                 | Ok _ -> failwith "Expected type error for `name` field #4"
 
                 match Decode.fromString (Decode.option (Decode.field "something_undefined" Decode.int)) json with
@@ -1466,8 +1479,8 @@ Expecting an object with a field named `this_field_do_not_exist` but instead got
                         """
 Error at: `$.something_undefined`
 Expecting an int but instead got: null
-                        """.Trim()
-                    equal expected msg
+                        """ |> String.normalize
+                    equal expected (msg |> String.normalize)
                 | Ok _ -> failwith "Expected type error for `name` field"
 
                 // Alfonso: Should this test pass? We should use Decode.optional instead
@@ -1488,13 +1501,13 @@ Expecting an int but instead got: null
 Error at: `$`
 Expecting an object with a field named `height` but instead got:
 {
-    "name": "maxime",
-    "age": 25,
-    "something_undefined": null
+  "name": "maxime",
+  "age": 25,
+  "something_undefined": null
 }
-                        """.Trim()
+                        """ |> String.normalize
 
-                    equal expected msg
+                    equal expected (msg |> String.normalize)
 
                 | Ok _ -> failwith "Expected type error for `height` field"
 
@@ -1530,11 +1543,7 @@ Expecting an object with a field named `height` but instead got:
                 equal expected actual
 
             testCase "succeed output an error if the JSON is invalid" <| fun _ ->
-                #if FABLE_COMPILER
-                let expected = Error("Given an invalid JSON: Unexpected token m in JSON at position 0")
-                #else
-                let expected = Error("Given an invalid JSON: Unexpected character encountered while parsing value: m. Path '', line 0, position 0.")
-                #endif
+                let expected = Error("Given an invalid JSON: 'm' is an invalid start of a value. LineNumber: 0 | BytePositionInLine: 0.")
                 let actual =
                     Decode.fromString (Decode.succeed 7) "maxime"
 
@@ -1595,17 +1604,17 @@ Expecting an object with a field named `height` but instead got:
                 equal expected actual
 
 
-            testCase "andThen generate an error if an error occuered" <| fun _ ->
+            testCase "andThen generate an error if an error occurred" <| fun _ ->
                 let expected =
                     Error(
                         """
 Error at: `$`
 Expecting an object with a field named `version` but instead got:
 {
-    "info": 3,
-    "data": 2
+  "info": 3,
+  "data": 2
 }
-                        """.Trim())
+                        """ |> String.normalize)
                 let infoHelp version : Decoder<int> =
                     match version with
                     | 4 ->
@@ -1613,7 +1622,7 @@ Expecting an object with a field named `version` but instead got:
                     | 3 ->
                         Decode.succeed 1
                     | _ ->
-                        Decode.fail <| "Trying to decode info, but version " + version.ToString() + "is not supported"
+                        Decode.fail <| $"Trying to decode info, but version ${version} is not supported"
 
                 let info =
                     Decode.field "version" Decode.int
@@ -1621,6 +1630,7 @@ Expecting an object with a field named `version` but instead got:
 
                 let actual =
                     Decode.fromString info """{ "info": 3, "data": 2 }"""
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -1868,9 +1878,9 @@ Expecting an object with a field named `version` but instead got:
 Error at: `$`
 Expecting an object with a field named `name` but instead got:
 {
-    "age": 25
+  "age": 25
 }
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let decoder =
                     Decode.object
@@ -1880,6 +1890,7 @@ Expecting an object with a field named `name` but instead got:
 
                 let actual =
                     Decode.fromString decoder json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -1890,7 +1901,7 @@ Expecting an object with a field named `name` but instead got:
                         """
 Error at: `$.name`
 Expecting a string but instead got: 12
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let decoder =
                     Decode.object
@@ -1900,6 +1911,7 @@ Expecting a string but instead got: 12
 
                 let actual =
                     Decode.fromString decoder json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -1955,12 +1967,12 @@ Expecting a string but instead got: 12
                         """
 Error at: `$.name`
 Expecting a string but instead got: 12
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let decoder = Decode.object (fun get ->
                     { optionalField = get.Optional.Field "name" Decode.string })
 
-                let actual = Decode.fromString decoder json
+                let actual = Decode.fromString decoder json |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -1996,7 +2008,7 @@ Expecting a string but instead got: 12
                         """
 Error at: `$.name`
 Expecting a string but instead got: 12
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let decoder =
                     Decode.object
@@ -2006,6 +2018,7 @@ Expecting a string but instead got: 12
 
                 let actual =
                     Decode.fromString decoder json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -2034,7 +2047,7 @@ Expecting a string but instead got: 12
 Error at: `$.user`
 Expecting an object but instead got:
 "maxime"
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let decoder =
                     Decode.object
@@ -2044,6 +2057,7 @@ Expecting an object but instead got:
 
                 let actual =
                     Decode.fromString decoder json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -2055,13 +2069,13 @@ Expecting an object but instead got:
 Error at: `$.user.firstname`
 Expecting an object with path `user.firstname` but instead got:
 {
-    "user": {
-        "name": "maxime",
-        "age": 25
-    }
+  "user": {
+    "name": "maxime",
+    "age": 25
+  }
 }
-Node `firstname` is unkown.
-                        """.Trim())
+Node `firstname` is unknown.
+                        """ |> String.normalize)
 
                 let decoder =
                     Decode.object
@@ -2071,6 +2085,7 @@ Node `firstname` is unkown.
 
                 let actual =
                     Decode.fromString decoder json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -2081,7 +2096,7 @@ Node `firstname` is unkown.
                         """
 Error at: `$.user.name`
 Expecting a string but instead got: 12
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let decoder =
                     Decode.object
@@ -2091,6 +2106,7 @@ Expecting a string but instead got: 12
 
                 let actual =
                     Decode.fromString decoder json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -2118,7 +2134,7 @@ Expecting a string but instead got: 12
 Error at: `$.user`
 Expecting an object but instead got:
 "maxime"
-                        """.Trim()
+                        """ |> String.normalize
                     )
 
                 let decoder =
@@ -2129,6 +2145,7 @@ Expecting an object but instead got:
 
                 let actual =
                     Decode.fromString decoder json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -2154,7 +2171,7 @@ Expecting an object but instead got:
                         """
 Error at: `$.user.name`
 Expecting a string but instead got: 12
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let decoder =
                     Decode.object
@@ -2164,6 +2181,7 @@ Expecting a string but instead got: 12
 
                 let actual =
                     Decode.fromString decoder json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -2202,7 +2220,7 @@ Expecting a string but instead got: 12
                         | "rectangle" ->
                             Shape.DecoderRectangle
                         | shape ->
-                            Decode.fail (sprintf "Unknown shape type %s" shape))
+                            Decode.fail $"Unknown shape type %s{shape}")
 
                 let decoder =
                     Decode.object (fun get ->
@@ -2235,7 +2253,7 @@ Expecting a string but instead got: 12
                         | "rectangle" ->
                             Shape.DecoderRectangle
                         | shape ->
-                            Decode.fail (sprintf "Unknown shape type %s" shape))
+                            Decode.fail $"Unknown shape type %s{shape}")
 
                 let decoder =
                     Decode.object (fun get ->
@@ -2266,7 +2284,7 @@ Expecting a string but instead got: 12
                         | "rectangle" ->
                             Shape.DecoderRectangle
                         | shape ->
-                            Decode.fail (sprintf "Unknown shape type %s" shape))
+                            Decode.fail $"Unknown shape type %s{shape}")
 
                 let decoder =
                     Decode.object (fun get ->
@@ -2278,6 +2296,7 @@ Expecting a string but instead got: 12
                     Decode.fromString
                         decoder
                         json
+                    |> Result.mapError String.normalize
 
                 let expected =
                     Error (
@@ -2285,9 +2304,9 @@ Expecting a string but instead got: 12
 Error at: `$`
 Expecting an object with a field named `radius` but instead got:
 {
-    "enabled": true,
-    "shape": "circle"
-}                   """.Trim())
+  "enabled": true,
+  "shape": "circle"
+}                   """ |> String.normalize)
 
                 equal expected actual
 
@@ -2305,7 +2324,7 @@ Expecting an object with a field named `radius` but instead got:
                         | "rectangle" ->
                             Shape.DecoderRectangle
                         | shape ->
-                            Decode.fail (sprintf "Unknown shape type %s" shape))
+                            Decode.fail $"Unknown shape type %s{shape}")
 
                 let decoder =
                     Decode.object (fun get ->
@@ -2337,7 +2356,7 @@ Expecting an object with a field named `radius` but instead got:
                         | "rectangle" ->
                             Shape.DecoderRectangle
                         | shape ->
-                            Decode.fail (sprintf "Unknown shape type %s" shape))
+                            Decode.fail $"Unknown shape type %s{shape}")
 
                 let decoder =
                     Decode.object (fun get ->
@@ -2369,7 +2388,7 @@ Expecting an object with a field named `radius` but instead got:
                         | "rectangle" ->
                             Shape.DecoderRectangle
                         | shape ->
-                            Decode.fail (sprintf "Unknown shape type %s" shape))
+                            Decode.fail $"Unknown shape type %s{shape}")
 
                 let decoder =
                     Decode.object (fun get ->
@@ -2401,7 +2420,7 @@ Expecting an object with a field named `radius` but instead got:
                         | "rectangle" ->
                             Shape.DecoderRectangle
                         | shape ->
-                            Decode.fail (sprintf "Unknown shape type %s" shape))
+                            Decode.fail $"Unknown shape type %s{shape}")
 
                 let decoder =
                     Decode.object (fun get ->
@@ -2413,9 +2432,14 @@ Expecting an object with a field named `radius` but instead got:
                     Decode.fromString
                         decoder
                         json
+                    |> Result.mapError String.normalize
 
                 let expected =
-                    Error "Error at: `$.radius`\nExpecting an int but instead got: \"maxime\""
+                    Error ("""
+Error at: `$.radius`
+Expecting an int but instead got: "maxime"
+Reason: not an integral value or not within the allowed range of -2147483648 to 2147483647
+""" |> String.normalize)
 
                 equal expected actual
 
@@ -2432,7 +2456,7 @@ Expecting an object with a field named `radius` but instead got:
                         | "rectangle" ->
                             Shape.DecoderRectangle
                         | shape ->
-                            Decode.fail (sprintf "Unknown shape type %s" shape))
+                            Decode.fail $"Unknown shape type %s{shape}")
 
                 let decoder =
                     Decode.object (fun get ->
@@ -2461,30 +2485,31 @@ The following errors were found:
 Error at: `$`
 Expecting an object with a field named `missing_field_1` but instead got:
 {
-    "age": 25,
-    "fieldC": "not_a_number",
-    "fieldD": {
-        "sub_field": "not_a_boolean"
-    }
+  "age": 25,
+  "fieldC": "not_a_number",
+  "fieldD": {
+    "sub_field": "not_a_boolean"
+  }
 }
 
 Error at: `$.missing_field_2.sub_field`
 Expecting an object with path `missing_field_2.sub_field` but instead got:
 {
-    "age": 25,
-    "fieldC": "not_a_number",
-    "fieldD": {
-        "sub_field": "not_a_boolean"
-    }
+  "age": 25,
+  "fieldC": "not_a_number",
+  "fieldD": {
+    "sub_field": "not_a_boolean"
+  }
 }
-Node `sub_field` is unkown.
+Node `sub_field` is unknown.
 
 Error at: `$.fieldC`
 Expecting an int but instead got: "not_a_number"
+Reason: not an integral value or not within the allowed range of -2147483648 to 2147483647
 
 Error at: `$.fieldD.sub_field`
 Expecting a boolean but instead got: "not_a_boolean"
-                        """.Trim())
+                        """ |> String.normalize)
 
                 let decoder =
                     Decode.object (fun get ->
@@ -2498,6 +2523,7 @@ Expecting a boolean but instead got: "not_a_boolean"
 
                 let actual =
                     Decode.fromString decoder json
+                    |> Result.mapError String.normalize
 
                 equal expected actual
 
@@ -2781,25 +2807,17 @@ Expecting a boolean but instead got: "not_a_boolean"
                 equal Enum_Int8.NinetyNine res
 
             testCase "Auto decoders for enum<int8> returns an error if the Enum value is invalid" <| fun _ ->
-#if FABLE_COMPILER
-                let value =
-                    Error(
-                        """
-Error at: `$`
-Expecting Tests.Types.Enum_Int8[System.SByte] but instead got: 2
-Reason: Unkown value provided for the enum
-                        """.Trim())
-#else
                 let value =
                     Error(
                         """
 Error at: `$`
 Expecting Tests.Types+Enum_Int8 but instead got: 2
-Reason: Unkown value provided for the enum
-                        """.Trim())
-#endif
+Reason: Unknown value provided for the enum
+                        """ |> String.normalize)
 
-                let res = Decode.Auto.fromString<Enum_Int8>("2")
+                let res =
+                    Decode.Auto.fromString<Enum_Int8>("2")
+                    |> Result.mapError String.normalize
                 equal value res
 
             testCase "Auto decoders works for enum<uint8>" <| fun _ ->
@@ -2807,25 +2825,18 @@ Reason: Unkown value provided for the enum
                 equal Enum_UInt8.NinetyNine res
 
             testCase "Auto decoders for enum<uint8> returns an error if the Enum value is invalid" <| fun _ ->
-#if FABLE_COMPILER
-                let value =
-                    Error(
-                        """
-Error at: `$`
-Expecting Tests.Types.Enum_UInt8[System.Byte] but instead got: 2
-Reason: Unkown value provided for the enum
-                        """.Trim())
-#else
                 let value =
                     Error(
                         """
 Error at: `$`
 Expecting Tests.Types+Enum_UInt8 but instead got: 2
-Reason: Unkown value provided for the enum
-                        """.Trim())
-#endif
+Reason: Unknown value provided for the enum
+                        """ |> String.normalize)
 
-                let res = Decode.Auto.fromString<Enum_UInt8>("2")
+                let res =
+                    Decode.Auto.fromString<Enum_UInt8>("2")
+                    |> Result.mapError String.normalize
+
                 equal value res
 
             testCase "Auto decoders works for enum<int16>" <| fun _ ->
@@ -2833,25 +2844,18 @@ Reason: Unkown value provided for the enum
                 equal Enum_Int16.NinetyNine res
 
             testCase "Auto decoders for enum<int16> returns an error if the Enum value is invalid" <| fun _ ->
-#if FABLE_COMPILER
-                let value =
-                    Error(
-                        """
-Error at: `$`
-Expecting Tests.Types.Enum_Int16[System.Int16] but instead got: 2
-Reason: Unkown value provided for the enum
-                        """.Trim())
-#else
                 let value =
                     Error(
                         """
 Error at: `$`
 Expecting Tests.Types+Enum_Int16 but instead got: 2
-Reason: Unkown value provided for the enum
-                        """.Trim())
-#endif
+Reason: Unknown value provided for the enum
+                        """ |> String.normalize)
 
-                let res = Decode.Auto.fromString<Enum_Int16>("2")
+                let res =
+                    Decode.Auto.fromString<Enum_Int16>("2")
+                    |> Result.mapError String.normalize
+
                 equal value res
 
             testCase "Auto decoders works for enum<uint16>" <| fun _ ->
@@ -2859,25 +2863,18 @@ Reason: Unkown value provided for the enum
                 equal Enum_UInt16.NinetyNine res
 
             testCase "Auto decoders for enum<ºint16> returns an error if the Enum value is invalid" <| fun _ ->
-#if FABLE_COMPILER
-                let value =
-                    Error(
-                        """
-Error at: `$`
-Expecting Tests.Types.Enum_UInt16[System.UInt16] but instead got: 2
-Reason: Unkown value provided for the enum
-                        """.Trim())
-#else
                 let value =
                     Error(
                         """
 Error at: `$`
 Expecting Tests.Types+Enum_UInt16 but instead got: 2
-Reason: Unkown value provided for the enum
-                        """.Trim())
-#endif
+Reason: Unknown value provided for the enum
+                        """ |> String.normalize)
 
-                let res = Decode.Auto.fromString<Enum_UInt16>("2")
+                let res =
+                    Decode.Auto.fromString<Enum_UInt16>("2")
+                    |> Result.mapError String.normalize
+
                 equal value res
 
             testCase "Auto decoders works for enum<int>" <| fun _ ->
@@ -2885,25 +2882,18 @@ Reason: Unkown value provided for the enum
                 equal Enum_Int.One res
 
             testCase "Auto decoders for enum<int> returns an error if the Enum value is invalid" <| fun _ ->
-#if FABLE_COMPILER
-                let value =
-                    Error(
-                        """
-Error at: `$`
-Expecting Tests.Types.Enum_Int[System.Int32] but instead got: 4
-Reason: Unkown value provided for the enum
-                        """.Trim())
-#else
                 let value =
                     Error(
                         """
 Error at: `$`
 Expecting Tests.Types+Enum_Int but instead got: 4
-Reason: Unkown value provided for the enum
-                        """.Trim())
-#endif
+Reason: Unknown value provided for the enum
+                        """ |> String.normalize)
 
-                let res = Decode.Auto.fromString<Enum_Int>("4")
+                let res =
+                    Decode.Auto.fromString<Enum_Int>("4")
+                    |> Result.mapError String.normalize
+
                 equal value res
 
             testCase "Auto decoders works for enum<uint32>" <| fun _ ->
@@ -2911,36 +2901,20 @@ Reason: Unkown value provided for the enum
                 equal Enum_UInt32.NinetyNine res
 
             testCase "Auto decoders for enum<uint32> returns an error if the Enum value is invalid" <| fun _ ->
-#if FABLE_COMPILER
-                let value =
-                    Error(
-                        """
-Error at: `$`
-Expecting Tests.Types.Enum_UInt32[System.UInt32] but instead got: 2
-Reason: Unkown value provided for the enum
-                        """.Trim())
-#else
                 let value =
                     Error(
                         """
 Error at: `$`
 Expecting Tests.Types+Enum_UInt32 but instead got: 2
-Reason: Unkown value provided for the enum
-                        """.Trim())
-#endif
+Reason: Unknown value provided for the enum
+                        """ |> String.normalize)
 
-                let res = Decode.Auto.fromString<Enum_UInt32>("2")
+                let res =
+                    Decode.Auto.fromString<Enum_UInt32>("2")
+                    |> Result.mapError String.normalize
+
                 equal value res
 
-    (*
-            #if NETFRAMEWORK
-            testCase "Auto decoders  works with char based Enums" <| fun _ ->
-                let value = CharEnum.A
-                let json = Encode.Auto.toString(4, value)
-                let res = Decode.Auto.unsafeFromString<CharEnum>(json)
-                equal value res
-            #endif
-    *)
             testCase "Auto decoders works for null" <| fun _ ->
                 let value = null
                 let json = Encode.Auto.toString(4, value)
@@ -3018,7 +2992,7 @@ Reason: Unkown value provided for the enum
                 equal expected actual
 
             testCase "Auto.generateDecoder throws for field using a non optional class" <| fun _ ->
-                let expected = """Cannot generate auto decoder for Tests.Types.BaseClass. Please pass an extra decoder.
+                let expected = String.normalize """Cannot generate auto decoder for Tests.Types.BaseClass. Please pass an extra decoder.
 
 Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation/auto/extra-coders.html#ready-to-use-extra-coders"""
 
@@ -3028,7 +3002,7 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
                         ""
                     with ex ->
                         ex.Message
-                errorMsg.Replace("+", ".") |> equal expected
+                errorMsg.Replace("+", ".") |> String.normalize |> equal expected
 
             testCase "Auto.fromString works for Class marked as optional" <| fun _ ->
                 let json = """null"""
@@ -3038,9 +3012,10 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
                 equal expected actual
 
             testCase "Auto.generateDecoder throws for Class" <| fun _ ->
-                let expected = """Cannot generate auto decoder for Tests.Types.BaseClass. Please pass an extra decoder.
+                let expected = String.normalize """Cannot generate auto decoder for Tests.Types.BaseClass. Please pass an extra decoder.
 
 Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation/auto/extra-coders.html#ready-to-use-extra-coders"""
+
 
                 let errorMsg =
                     try
@@ -3048,7 +3023,7 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
                         ""
                     with ex ->
                         ex.Message
-                errorMsg.Replace("+", ".") |> equal expected
+                errorMsg.Replace("+", ".") |> String.normalize |> equal expected
 
             testCase "Auto.fromString works for records missing an optional field" <| fun _ ->
                 let json = """{ "must": "must value"}"""
@@ -3095,7 +3070,12 @@ Documentation available at: https://thoth-org.github.io/Thoth.Json/documentation
             testCase "Auto.fromString works gives proper error for wrong union fields" <| fun _ ->
                 let json = """["Multi", "bar", "foo", "zas"]"""
                 Decode.Auto.fromString<UnionWithMultipleFields>(json, caseStrategy=CamelCase)
-                |> equal (Error "Error at: `$[2]`\nExpecting an int but instead got: \"foo\"")
+                |> Result.mapError String.normalize
+                |> equal (Error ("""
+Error at: `$[2]`
+Expecting an int but instead got: "foo"
+Reason: not an integral value or not within the allowed range of -2147483648 to 2147483647
+""" |> String.normalize))
 
             // TODO: Should we allow shorter arrays when last fields are options?
             testCase "Auto.fromString works gives proper error for wrong array length" <| fun _ ->

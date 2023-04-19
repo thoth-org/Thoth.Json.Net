@@ -36,6 +36,5 @@
     <PackageReference Update="FSharp.Core">
       <Version>6.0.7</Version>
     </PackageReference>
-    <PackageReference Include="Fable.Core" Version="3.7.1" />
   </ItemGroup>
 </Project>

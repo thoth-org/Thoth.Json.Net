@@ -1,24 +1,17 @@
 namespace Thoth.Json.Net
 
 open System
-open System.Text
 open System.Text.Json
 open System.Globalization
-open System.IO
 
 [<RequireQualifiedAccess>]
 module Decode =
     module Helpers =
         let anyToString (token: JsonElement) : string =
-            let mutable jsonWriterOptions = JsonWriterOptions()
-            jsonWriterOptions.Indented <- true
+            let options = JsonSerializerOptions()
+            options.WriteIndented <- true
 
-            use stream = new MemoryStream()
-            use jsonWriter = new Utf8JsonWriter(stream, jsonWriterOptions)
-
-            token.WriteTo(jsonWriter)
-
-            Encoding.UTF8.GetString(stream.ToArray())
+            JsonSerializer.Serialize(token, options)
 
         let inline getField (fieldName: string) (token: JsonElement) =
             match token.TryGetProperty fieldName with
@@ -60,7 +53,7 @@ module Decode =
             | BadField (msg, value) ->
                 genericMsg msg value true
             | BadPath (msg, value, fieldName) ->
-                genericMsg msg value true + ("\nNode `" + fieldName + "` is unkown.")
+                genericMsg msg value true + ("\nNode `" + fieldName + "` is unknown.")
             | TooSmallArray (msg, value) ->
                 "Expecting " + msg + ".\n" + (Helpers.anyToString value)
             | BadOneOf messages ->
@@ -170,30 +163,33 @@ module Decode =
 
     let unit : Decoder<unit> =
         fun path value ->
-            if Helpers.isNullValue value then
+            if Helpers.isNullValue value || Helpers.isUndefined value then
                 Ok ()
             else
                 Error (path, BadPrimitive("null", value))
 
     let inline private integral
-                    (name : string)
-                    (tryGet: JsonElement -> 'T option)
-                    (tryParse : string -> bool * 'T) : Decoder<'T> =
+        (name: string)
+        (rangeDescription: string)
+        (tryGet: JsonElement -> 'T option)
+        (tryParse : string -> bool * 'T) : Decoder<'T>
+        =
         fun path value ->
             if Helpers.isNumber value then
                 match tryGet value with
                 | Some got -> Ok got
-                | None -> Error (path, BadPrimitive(name, value))
+                | None -> Error (path, BadPrimitiveExtra(name, value, $"not an integral value or not within the allowed range of {rangeDescription}"))
             elif Helpers.isString value then
                 match tryParse (Helpers.asString value) with
                 | true, parsed -> Ok parsed
-                | _ -> (path, BadPrimitive(name, value)) |> Error
+                | _ -> Error (path, BadPrimitiveExtra(name, value, $"not an integral value or not within the allowed range of {rangeDescription}"))
             else
                 Error (path, BadPrimitive(name, value))
 
     let sbyte : Decoder<sbyte> =
         integral
             "an sbyte"
+            "-128 to 127"
             (fun jEl ->
                 jEl.TryGetSByte()
                 |> function
@@ -205,6 +201,7 @@ module Decode =
     let byte : Decoder<byte> =
         integral
             "a byte"
+            "0 to 255"
             (fun jEl ->
                 jEl.TryGetByte()
                 |> function
@@ -215,6 +212,7 @@ module Decode =
     let int16 : Decoder<int16> =
         integral
             "an int16"
+            "-32768 to 32767"
             (fun jEl ->
                 jEl.TryGetInt16()
                 |> function
@@ -225,6 +223,7 @@ module Decode =
     let uint16 : Decoder<uint16> =
         integral
             "a uint16"
+            "0 to 65535"
             (fun jEl ->
                 jEl.TryGetUInt16()
                 |> function
@@ -235,6 +234,7 @@ module Decode =
     let int : Decoder<int> =
         integral
             "an int"
+            "-2147483648 to 2147483647"
             (fun jEl ->
                 jEl.TryGetInt32()
                 |> function
@@ -245,6 +245,7 @@ module Decode =
     let uint32 : Decoder<uint32> =
         integral
             "a uint32"
+            "0 to 4294967295"
             (fun jEl ->
                 jEl.TryGetUInt32()
                 |> function
@@ -255,6 +256,7 @@ module Decode =
     let int64 : Decoder<int64> =
         integral
             "an int64"
+            "-9223372036854775808 to 9223372036854775807"
             (fun jEl ->
                 jEl.TryGetInt64()
                 |> function
@@ -265,6 +267,7 @@ module Decode =
     let uint64 : Decoder<uint64> =
         integral
             "a uint64"
+            "0 to 18446744073709551615"
             (fun jEl ->
                 jEl.TryGetUInt64()
                 |> function
@@ -448,7 +451,7 @@ module Decode =
                                 let result = badPathError fieldNames None firstValue
                                 curPath, nextValue, Some result
                             else
-                                curPath + "." + field, curValue, None
+                                $"{curPath}.{field}", nextValue, None
                         | None ->
                             let result = badPathError fieldNames None firstValue
                             curPath, curValue, Some result
@@ -1084,11 +1087,8 @@ module Decode =
                 | Error _ -> acc
                 | Ok result ->
                     Helpers.getField name value
-                    |> function
-                        | Some field ->
-                            decoder.BoxedDecoder $"{path}.{name}" field
-                        | None ->
-                            Error (path, BadField($"an object with a field named `{name}`", value))
+                    |> Option.defaultValue Unchecked.defaultof<JsonElement>
+                    |> decoder.BoxedDecoder $"{path}.{name}"
                     |> Result.map (fun v -> v::result))
 
     let private mixedArray offset (decoders: BoxedDecoder[]) (path: string) (values: JsonElement[]): Result<obj list, DecoderError> =
@@ -1112,7 +1112,7 @@ module Decode =
     let private genericOption t (decoder: BoxedDecoder) =
         let ucis = FSharpType.GetUnionCases(t)
         fun (path : string) (value: JsonElement) ->
-            if Helpers.isNullValue value then
+            if Helpers.isNullValue value || Helpers.isUndefined value then
                 Ok (FSharpValue.MakeUnion(ucis[0], [||]))
             else
                 decoder.Decode(path, value)
@@ -1209,28 +1209,7 @@ module Decode =
     and private makeUnion extra caseStrategy (t : Type) (searchedName : string) (path : string) (values: JsonElement[]) =
         let uci =
             FSharpType.GetUnionCases(t, allowAccessToPrivateRepresentation=true)
-            |> Array.tryFind (fun uci ->
-                #if !NETFRAMEWORK
-                match t with
-                | Util.Reflection.StringEnum t ->
-                    match uci with
-                    | Util.Reflection.CompiledName name ->
-                        name = searchedName
-
-                    | _ ->
-                        match t.ConstructorArguments with
-                        | Util.Reflection.LowerFirst ->
-                            let adaptedName = uci.Name[..0].ToLowerInvariant() + uci.Name[1..]
-                            adaptedName = searchedName
-
-                        | Util.Reflection.Forward ->
-                            uci.Name = searchedName
-                | _ ->
-                    uci.Name = searchedName
-                #else
-                uci.Name = searchedName
-                #endif
-            )
+            |> Array.tryFind (fun uci -> uci.Name = searchedName)
 
         match uci with
         | None -> (path, FailMessage("Cannot find case " + searchedName + " in " + t.FullName)) |> Error

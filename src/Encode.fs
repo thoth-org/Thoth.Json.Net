@@ -1,13 +1,13 @@
 namespace Thoth.Json.Net
 
-open System.Text
+open System.Text.Encodings.Web
 open System.Text.Json.Nodes
+open System.Text.Unicode
 
 [<RequireQualifiedAccess>]
 module Encode =
     open System.Globalization
     open System.Collections.Generic
-    open System.IO
     open System.Text.Json
 
     ///**Description**
@@ -83,7 +83,7 @@ module Encode =
     ///**Exceptions**
     ///
     let nil: JsonNode =
-        JsonValue.Create(null)
+        JsonNode.Parse("null")
 
     ///**Description**
     /// Encode a bool
@@ -341,15 +341,10 @@ module Encode =
     ///**Exceptions**
     ///
     let toString (space: int) (token: JsonNode) : string =
-        let mutable writerOptions = JsonWriterOptions()
-        writerOptions.Indented <- space > 0
+        let options = JsonSerializerOptions()
+        options.WriteIndented <- space > 0
 
-        use stream = new MemoryStream()
-        use jsonWriter = new Utf8JsonWriter(stream, writerOptions)
-
-        token.WriteTo(jsonWriter)
-
-        Encoding.UTF8.GetString(stream.ToArray())
+        JsonSerializer.Serialize(token, options)
 
     //////////////////
     // Reflection ///
@@ -400,23 +395,7 @@ module Encode =
                     let info, fields = FSharpValue.GetUnionFields(value, t, allowAccessToPrivateRepresentation=true)
                     match fields.Length with
                     | 0 ->
-                        #if !NETFRAMEWORK
-                        match t with
-                        // Replicate Fable behavior when using StringEnum
-                        | Util.Reflection.StringEnum t ->
-                            match info with
-                            | Util.Reflection.CompiledName name -> string name
-                            | _ ->
-                                match t.ConstructorArguments with
-                                | Util.Reflection.LowerFirst ->
-                                    let name = info.Name[..0].ToLowerInvariant() + info.Name[1..]
-                                    string name
-                                | Util.Reflection.Forward -> string info.Name
-
-                        | _ -> string info.Name
-                        #else
                         string info.Name
-                        #endif
 
                     | len ->
                         let fieldTypes = info.GetFields()
