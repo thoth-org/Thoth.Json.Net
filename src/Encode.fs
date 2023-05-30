@@ -386,10 +386,10 @@ module Encode =
                     FSharpType.GetRecordFields(t, allowAccessToPrivateRepresentation=true)
                     |> Array.map (fun fi ->
                         let targetKey = Util.Casing.convert caseStrategy fi.Name
-                        let encoder = autoEncoder extra caseStrategy skipNullField fi.PropertyType
                         fun (source: obj) (target: JObject) ->
                             let value = FSharpValue.GetRecordField(source, fi)
                             if not skipNullField || (skipNullField && not (isNull value)) then // Discard null fields
+                                let encoder = autoEncoder extra caseStrategy skipNullField (value.GetType())
                                 target.[targetKey] <- encoder.Encode value
                             target)
                 boxEncoder(fun (source: obj) ->
