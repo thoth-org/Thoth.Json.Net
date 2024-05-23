@@ -4,7 +4,7 @@ source https://www.nuget.org/api/v2
 storage:none
 
 nuget FSharp.Core redirects:force
-nuget Newtonsoft.Json >= 11.0.2 lowest_matching:true
+nuget Newtonsoft.Json >= 13.0.1 lowest_matching:true
 nuget Expecto
 nuget Fable.Core >= 3 framework: netstandard2.0
 nuget Ionide.KeepAChangelog.Tasks copy_local: true

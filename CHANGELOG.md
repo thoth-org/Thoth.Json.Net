@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 12.0.0 - 2024-05-23
+
+### Changed
+
+* Upgrade to Newtonsoft.Json 13.0.1 to fix security vulnerability
+
 ## 11.0.0 - 2023-02-08
 
 ### Fixed
