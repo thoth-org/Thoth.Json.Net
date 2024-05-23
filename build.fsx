@@ -157,7 +157,7 @@ pipeline "Release" {
     whenAll {
         branch "main"
         envVar "NUGET_KEY"
-        envVar "GITHUB_TOKEN"
+        envVar "GITHUB_TOKEN_THOTH_ORG"
     }
 
     Stages.clean
@@ -175,7 +175,7 @@ pipeline "Release" {
 
     stage "Release on Github" {
         run (fun ctx ->
-            let githubToken = ctx.GetEnvVar "GITHUB_TOKEN"
+            let githubToken = ctx.GetEnvVar "GITHUB_TOKEN_THOTH_ORG"
 
             let version = Changelog.getLastVersion "CHANGELOG.md"
             let isPreRelease = Changelog.isPreRelease version
