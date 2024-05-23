@@ -28,6 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />
+    <Compile Include="Helpers.fs" />
     <Compile Include="Decode.fs" />
     <Compile Include="Encode.fs" />
     <Compile Include="Extra.fs" />

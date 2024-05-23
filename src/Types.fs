@@ -36,9 +36,12 @@ type BoxedEncoder() =
     abstract Encode: value: obj -> JsonValue
     member this.BoxedEncoder: Encoder<obj> = this.Encode
 
+/// Represents the `.GetGenericTypeDefinition().FullName` of a type
+type TypeName = TypeName of string
+
 type ExtraCoders =
     { Hash: string
-      Coders: Map<string, BoxedEncoder * BoxedDecoder> }
+      Coders: Map<TypeName, BoxedEncoder * BoxedDecoder> }
 
 module internal Cache =
     open System
